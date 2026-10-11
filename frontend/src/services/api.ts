@@ -433,6 +433,18 @@ export const api = {
 
   exportShootersCSV: () => requestText('/api/shooters/export/csv'),
 
+  // Cups (league/season aggregates)
+  getCups: () => requestRefresh<any[]>('/api/cups'),
+  getCup: (id: string) => requestRefresh<any>(`/api/cups/${id}`),
+  createCup: (data: any) => request<any>('/api/cups', { method: 'POST', body: JSON.stringify(data) }),
+  updateCup: (id: string, data: any) => request<any>(`/api/cups/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCup: (id: string) => request<any>(`/api/cups/${id}`, { method: 'DELETE' }),
+  addCupMatches: (id: string, matchIds: string[]) =>
+    request<any>(`/api/cups/${id}/matches`, { method: 'POST', body: JSON.stringify({ matchIds }) }),
+  removeCupMatch: (id: string, matchId: string) =>
+    request<any>(`/api/cups/${id}/matches/${matchId}`, { method: 'DELETE' }),
+  getCupResults: (id: string): Promise<any> => requestRefresh<any>(`/api/cups/${id}/results`),
+
   // Import
   importShooters: (file: File, options?: { hasHeader?: boolean; columnMapping?: Record<string, string>; updateIfExists?: boolean }) => {
     const form = new FormData();

@@ -4,10 +4,12 @@ import { TbTrash, TbLink, TbUnlink } from "react-icons/tb";
 
 interface BulkActionToolbarProps {
   selectedCount: number;
-  onEdit: () => void;
+  onEdit?: () => void;
+  onCreate?: () => void;
   onDelete: () => void;
   onClearSelection: () => void;
   editLabel?: string;
+  createLabel?: string;
   deleteLabel?: string;
   onGroup?: () => void;
   onUngroup?: () => void;
@@ -19,9 +21,11 @@ interface BulkActionToolbarProps {
 export default function BulkActionToolbar({
   selectedCount,
   onEdit,
+  onCreate,
   onDelete,
   onClearSelection,
   editLabel,
+  createLabel,
   deleteLabel,
   onGroup,
   onUngroup,
@@ -50,9 +54,16 @@ export default function BulkActionToolbar({
             {t('registration.bulkUngroup')}
           </Button>
         )}
-        <Button size="xs" color="blue" onClick={onEdit}>
-          {editLabel || t('bulkActions.editSelected')}
-        </Button>
+        {onCreate && (
+          <Button size="xs" color="green" onClick={onCreate}>
+            {createLabel || t('cups.generate')}
+          </Button>
+        )}
+        {onEdit && (
+          <Button size="xs" color="blue" onClick={onEdit}>
+            {editLabel || t('bulkActions.editSelected')}
+          </Button>
+        )}
         <Button size="xs" color="red" onClick={onDelete}>
           <TbTrash className="size-4 mr-2" />
           {deleteLabel || t('bulkActions.deleteSelected')}

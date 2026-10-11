@@ -7,6 +7,7 @@ import { divisionLabel } from '../../utils/constants';
 import { useConstLabels } from '../../hooks/useConstLabels';
 import ExportButtons from './ExportButtons';
 import ResultsTable, { type ColumnKey } from './ResultsTable';
+import { hasHitFactor } from '../../utils/hitFactor';
 import ShooterSummaryView from './ShooterSummaryModal';
 import type { DqShooter } from '../../stores/resultsStore';
 import { twMerge } from "tailwind-merge";
@@ -14,9 +15,13 @@ import { useMatchProgress } from "../../hooks/useMatchProgress";
 
 type ResultTab = 'byDivision' | 'overall' | 'byStage' | 'byCategory' | 'byTag';
 
-const DIVISION_COLUMNS: ColumnKey[] = ['position', 'shooter', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'matchPoints'];
-const OVERALL_COLUMNS: ColumnKey[] = ['position', 'shooter', 'division', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'matchPoints'];
+const DIVISION_COLUMNS: ColumnKey[] = ['position', 'shooter', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'hitFactor', 'matchPoints'];
+const OVERALL_COLUMNS: ColumnKey[] = ['position', 'shooter', 'division', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'hitFactor', 'matchPoints'];
 const STAGE_COLUMNS: ColumnKey[] = ['position', 'shooter', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'stagePercent', 'stagePoints', 'hitFactor', 'netPoints'];
+
+function matchColumns(columns: ColumnKey[], hasHf: boolean): ColumnKey[] {
+  return hasHf ? columns : columns.filter((col) => col !== 'hitFactor');
+}
 
 const TABS: { key: ResultTab; labelKey: string }[] = [
   { key: 'byDivision', labelKey: 'results.byDivision' },
@@ -96,6 +101,8 @@ function DivisionContent({ divisionResults, dqDivisions, loading, onShooterClick
 
   const scoredData = useMemo(() => progressData.scored != null ? {scored: progressData.scored, stagesLength: progressData.stagesLength} : undefined, [progressData.scored, progressData.stagesLength]);
 
+  const columns = matchColumns(DIVISION_COLUMNS, Object.values(divisionResults).some(hasHitFactor));
+
     useEffect(() => {
       if (!runningMatchId) return;
 
@@ -114,7 +121,7 @@ function DivisionContent({ divisionResults, dqDivisions, loading, onShooterClick
         .map(([division, results]) => (
           <div key={division} className="division-results-section mb-6">
             <h3 className="font-semibold text-lg mb-2 dark:text-white">{divisionLabel(division)}</h3>
-            <ResultsTable scored={scoredData} results={results as any[]} columns={DIVISION_COLUMNS} onShooterClick={onShooterClick} />
+            <ResultsTable scored={scoredData} results={results as any[]} columns={columns} onShooterClick={onShooterClick} />
           </div>
         ))}
       <DqTable dqShooters={dqDivisions} />
@@ -129,10 +136,12 @@ function OverallContent({ overallResults, dqOverall, onShooterClick }: {
 }) {
   const { t } = useTranslation();
 
+  const columns = matchColumns(OVERALL_COLUMNS, hasHitFactor(overallResults));
+
   return (
     <>
       <h2 className="print-only hidden text-lg font-bold mb-2">{t('results.overall')}</h2>
-      <ResultsTable results={overallResults as any[]} columns={OVERALL_COLUMNS} onShooterClick={onShooterClick} />
+      <ResultsTable results={overallResults as any[]} columns={columns} onShooterClick={onShooterClick} />
       <DqTable dqShooters={dqOverall} />
     </>
   );
@@ -232,6 +241,8 @@ function CategoryContent({ categoryResults, dqCategories }: {
   const { t } = useTranslation();
   const { categoryLabel } = useConstLabels();
 
+  const columns = matchColumns(DIVISION_COLUMNS, Object.values(categoryResults).some((divisions) => Object.values(divisions as Record<string, any[]>).some(hasHitFactor)));
+
   return (
     <>
       <h2 className="print-only hidden text-lg font-bold mb-2">{t('results.byCategory')}</h2>
@@ -243,7 +254,7 @@ function CategoryContent({ categoryResults, dqCategories }: {
             .map(([division, results]) => (
               <div key={division} className="mb-4 ml-2">
                 <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
-                <ResultsTable results={results as any[]} columns={DIVISION_COLUMNS} />
+                <ResultsTable results={results as any[]} columns={columns} />
               </div>
             ))}
         </div>
@@ -259,6 +270,8 @@ function TagContent({ tagResults, dqTags }: {
 }) {
   const { t } = useTranslation();
 
+  const columns = matchColumns(DIVISION_COLUMNS, Object.values(tagResults).some((divisions) => Object.values(divisions as Record<string, any[]>).some(hasHitFactor)));
+
   return (
     <>
       <h2 className="print-only hidden text-lg font-bold mb-2">{t('results.byTag')}</h2>
@@ -270,7 +283,7 @@ function TagContent({ tagResults, dqTags }: {
             .map(([division, results]) => (
               <div key={division} className="mb-4 ml-2">
                 <h4 className="font-medium text-sm text-gray-600 dark:bg-gray-400 mb-1">{divisionLabel(division)}</h4>
-                <ResultsTable results={results as any[]} columns={DIVISION_COLUMNS} />
+                <ResultsTable results={results as any[]} columns={columns} />
               </div>
             ))}
         </div>

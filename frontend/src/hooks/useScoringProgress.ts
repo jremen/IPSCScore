@@ -26,15 +26,20 @@ export function useScoringProgress(): {
   const activeStageId = useScoringStore((s) => s.activeStageId);
   const stages = useStageStore((s) => s.stages);
 
-  // Build set of scored registration_ids for the current stage
+  // Build set of scored registration_ids for the current stage.
+  // DQ shooters count as scored on every stage — they never block completion.
   const scoredIds = useMemo(() => {
-    if (!scoringProgress || !activeStageId) return new Set<string>();
-    return new Set(
-      scoringProgress.scored
-        .filter(e => e.stage_id === activeStageId)
-        .map(e => e.registration_id)
-    );
-  }, [scoringProgress, activeStageId]);
+    const set = new Set<string>();
+    if (scoringProgress && activeStageId) {
+      for (const e of scoringProgress.scored) {
+        if (e.stage_id === activeStageId) set.add(e.registration_id);
+      }
+    }
+    for (const r of registrations) {
+      if (r.is_dq) set.add(r.id);
+    }
+    return set;
+  }, [scoringProgress, activeStageId, registrations]);
 
   // Build per-squad scoring status
   const squadStatuses = useMemo(() => {

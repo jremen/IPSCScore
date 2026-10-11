@@ -14,6 +14,7 @@ function num(v: any): number {
 function normalizeNumericFields<T extends Record<string, any>>(row: T): T {
   const out: any = { ...row };
   for (const key of Object.keys(out)) {
+    if (key === 'hit_factor' && out[key] == null) continue;
     if (
       key === 'hit_factor' || key === 'net_points' || key === 'stage_points' ||
       key === 'stage_percent' || key === 'match_points' || key === 'match_percent' ||
@@ -66,6 +67,7 @@ interface OverallResult {
   is_dq: boolean;
   match_points: number;
   match_percent: number;
+  hit_factor?: number | null;
   position: number;
   alpha: number;
   charlie: number;

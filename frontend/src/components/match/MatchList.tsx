@@ -14,6 +14,7 @@ import CreateMatchModal from './CreateMatchModal';
 import ImportMatchModal from './ImportMatchModal';
 import ExportMatchModal from './ExportMatchModal';
 import BulkDeleteMatchesModal from './BulkDeleteMatchesModal';
+import CreateCupModal from '../cup/CreateCupModal';
 import SelectAllCheckbox from '../shared/SelectAllCheckbox';
 import BulkActionToolbar from '../shared/BulkActionToolbar';
 import { TbFileExport, TbFileUpload } from 'react-icons/tb';
@@ -36,6 +37,7 @@ export default function MatchList() {
   const [showExport, setShowExport] = useState<string | null>(null); // matchId
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [showBulkDelete, setShowBulkDelete] = useState(false);
+  const [showCreateCup, setShowCreateCup] = useState(false);
   const [search, setSearch] = useState('');
   const [filterFirearmType, setFilterFirearmType] = useState<FirearmType | ''>('');
   const [filterLevel, setFilterLevel] = useState<MatchLevel | ''>('');
@@ -168,7 +170,7 @@ export default function MatchList() {
 
         <BulkActionToolbar
           selectedCount={selection.selectedCount}
-          onEdit={() => {}}
+          onCreate={() => setShowCreateCup(true)}
           onDelete={() => setShowBulkDelete(true)}
           onClearSelection={selection.clearSelection}
         />
@@ -287,6 +289,11 @@ export default function MatchList() {
         matchIds={selection.selectedArray}
         matchNames={selectedNames}
         onDeleted={handleBulkDeleted}
+      />
+      <CreateCupModal
+        show={showCreateCup}
+        onClose={() => { setShowCreateCup(false); selection.clearSelection(); }}
+        preselectedMatchIds={selection.selectedArray}
       />
     </div>
   );

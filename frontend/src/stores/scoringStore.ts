@@ -500,13 +500,17 @@ export const useScoringStore = create<ScoringState & ScoringActions>((set, get) 
   },
 
   scoredIds: () => {
-    const { scoringProgress, activeStageId } = get();
-    if (!scoringProgress || !activeStageId) return new Set<string>();
-    return new Set(
-      scoringProgress.scored
-        .filter(e => e.stage_id === activeStageId)
-        .map(e => e.registration_id)
-    );
+    const { scoringProgress, activeStageId, registrations } = get();
+    const set = new Set<string>();
+    if (scoringProgress && activeStageId) {
+      for (const e of scoringProgress.scored) {
+        if (e.stage_id === activeStageId) set.add(e.registration_id);
+      }
+    }
+    for (const r of registrations) {
+      if (r.is_dq) set.add(r.id);
+    }
+    return set;
   },
 
   setOfflineMode: (offline: boolean) => set({ isOfflineMode: offline }),

@@ -1,12 +1,13 @@
 import { Table, TableHead, TableBody, TableRow, TableCell, TableHeadCell, Badge, Progress, theme } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { divisionLabel } from '../../utils/constants';
+import { formatHitFactor } from '../../utils/hitFactor';
 import { ScoringProgressEntry } from "../../types/scoring";
 import { twMerge } from "tailwind-merge";
 
 const PROGRESS_THEME = { base: twMerge(theme.progress.base, "relative overflow-visible!") };
 
-export type ColumnKey = 'position' | 'shooter' | 'division' | 'time' | 'alpha' | 'charlie' | 'delta' | 'miss' | 'noShootHits' | 'procedurals' | 'matchPercent' | 'matchPoints' | 'stagePercent' | 'stagePoints' | 'hitFactor' | 'netPoints';
+export type ColumnKey = 'position' | 'shooter' | 'division' | 'matches' | 'time' | 'alpha' | 'charlie' | 'delta' | 'miss' | 'noShootHits' | 'procedurals' | 'matchPercent' | 'matchPoints' | 'stagePercent' | 'stagePoints' | 'hitFactor' | 'netPoints';
 
 interface ResultsTableProps {
   results: any[];
@@ -16,13 +17,14 @@ interface ResultsTableProps {
   onShooterClick?: (registrationId: string) => void;
 }
 
-const DETAIL_COLUMNS: ColumnKey[] = ['division', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'matchPoints', 'stagePercent', 'stagePoints', 'hitFactor', 'netPoints'];
+const DETAIL_COLUMNS: ColumnKey[] = ['division', 'matches', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'matchPoints', 'stagePercent', 'stagePoints', 'hitFactor', 'netPoints'];
 
 function columnHeader(col: ColumnKey, t: (key: string, opts?: any) => string): string {
   const map: Record<ColumnKey, string> = {
     position: t('results.position'),
     shooter: t('results.shooter'),
     division: t('results.division'),
+    matches: t('cups.colMatches'),
     time: t('results.time', { defaultValue: 'Time' }),
     alpha: t('results.alpha'),
     charlie: t('results.charlie'),
@@ -56,8 +58,9 @@ function cellValue(col: ColumnKey, r: any): string {
     case 'matchPoints': return r.match_points?.toFixed(2);
     case 'stagePercent': return `${r.stage_percent?.toFixed(2)}%`;
     case 'stagePoints': return r.stage_points?.toFixed(2);
-    case 'hitFactor': return r.hit_factor?.toFixed(4);
+    case 'hitFactor': return formatHitFactor(r.hit_factor, '—');
     case 'netPoints': return r.net_points?.toFixed(2);
+    case 'matches': return `${r.matches_count ?? 0}/${r.matches_required ?? 0}`;
   }
 }
 
@@ -92,9 +95,9 @@ export default function ResultsTable({ results, scored, columns, showDqBadge = t
           </TableHead>
           <TableBody>
             {results.map((r) => {
-              const progress = scored?.stagesLength && scored?.scored ? scored?.scored?.filter(shooter => shooter.registration_id === r.registration_id).length / scored?.stagesLength * 100 : 0;
-              const progressText = scored?.stagesLength && scored?.scored ? `${scored?.scored?.filter(shooter => shooter.registration_id === r.registration_id).length} / ${scored?.stagesLength}` : "";
-              return <TableRow key={r.registration_id} className={r.is_dq ? 'bg-red-50' : ''}>
+              const progress = r.is_dq ? 100 : scored?.stagesLength && scored?.scored ? scored?.scored?.filter(shooter => shooter.registration_id === r.registration_id).length / scored?.stagesLength * 100 : 0;
+              const progressText = r.is_dq ? `${scored?.stagesLength ?? 0} / ${scored?.stagesLength ?? 0}` : scored?.stagesLength && scored?.scored ? `${scored?.scored?.filter(shooter => shooter.registration_id === r.registration_id).length} / ${scored?.stagesLength}` : "";
+              return <TableRow key={r.registration_id ?? r.shooter_id} className={r.is_dq ? 'bg-red-50' : ''}>
                 {columns.map(col => (
                   <TableCell key={col} className={cellClassName(col)}>
                     {col === 'shooter' && showDqBadge && r.is_dq ? (
@@ -131,7 +134,7 @@ export default function ResultsTable({ results, scored, columns, showDqBadge = t
             return val !== '0' && val !== '0.00' && val !== '0.00%' && val !== '—' && val !== '−0';
           });
           return (
-            <div key={r.registration_id} className={`px-3 py-2.5 ${r.is_dq ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
+            <div key={r.registration_id ?? r.shooter_id} className={`px-3 py-2.5 ${r.is_dq ? 'bg-red-50 dark:bg-red-900/10' : ''}`}>
               <div className="flex items-center gap-2 flex-wrap">
                 {columns.includes('position') && (
                   <span className="font-mono w-12 font-bold text-lg dark:text-white">{r.position}</span>

@@ -79,7 +79,7 @@ export default function ScoringNav() {
               ${activeStageId === stage.id ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 eink:bg-black! eink:text-white!' : 'cursor-pointer border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-gray-500'}`}
           >
             {t('scoring.stage', { number: stage.stage_number })}
-            {registrations.length > 0 && scoringProgress && scoringProgress.scored.filter(e => e.stage_id === stage.id).length === registrations.length && <span className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-2.5 leading-none shrink-0">✓</span>}
+            {registrations.length > 0 && scoringProgress && registrations.every(r => r.is_dq || scoringProgress.scored.some(e => e.stage_id === stage.id && e.registration_id === r.id)) && <span className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-2.5 leading-none shrink-0">✓</span>}
           </button>
         ))}
       </div>

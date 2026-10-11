@@ -17685,15 +17685,15 @@ async function recalculateStage(matchId, stageId) {
 // ../backend/src/routes/results.ts
 init_client();
 var resultsRoutes = new Hono2();
-function matchCte(isDq) {
-  const dqFilter = isDq ? "AND mr.is_dq = TRUE" : "AND mr.is_dq = FALSE";
-  return `
+var MATCH_TOTALS_CTE = `
     WITH stage_totals AS (
       SELECT
         ss.registration_id,
         SUM(ss.stage_points) as match_points,
         SUM(ss.procedural_count) as procedurals,
-        SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time
+        SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time,
+        SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.net_points ELSE 0 END) as hf_net_points,
+        SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.time ELSE 0 END) as hf_time
       FROM stage_scores ss
       JOIN stages st ON st.id = ss.stage_id
       WHERE ss.match_id = $1
@@ -17712,6 +17712,12 @@ function matchCte(isDq) {
       WHERE ss.match_id = $1
       GROUP BY ss.registration_id
     )
+`;
+var MATCH_HF_COLUMN = `CASE WHEN COALESCE(st.hf_time, 0) > 0 THEN ROUND(st.hf_net_points / st.hf_time, 4) ELSE NULL END as hit_factor,`;
+function matchCte(isDq) {
+  const dqFilter = isDq ? "AND mr.is_dq = TRUE" : "AND mr.is_dq = FALSE";
+  return `
+    ${MATCH_TOTALS_CTE}
     SELECT
       mr.id as registration_id,
       s.first_name, s.last_name,
@@ -17722,6 +17728,7 @@ function matchCte(isDq) {
       mr.is_dq,
       ${isDq ? "mr.dq_reason," : ""}
       COALESCE(st.match_points, 0) as match_points,
+      ${MATCH_HF_COLUMN}
       COALESCE(st.total_time, 0) as time,
       COALESCE(tt.alpha, 0) as alpha,
       COALESCE(tt.charlie, 0) as charlie,
@@ -17749,6 +17756,7 @@ resultsRoutes.get("/matches/:matchId/results/overall", async (c) => {
     ...r,
     position: i + 1,
     match_points: Number(r.match_points),
+    hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
     match_percent: highestPoints > 0 ? Math.round(Number(r.match_points) / highestPoints * 1e4) / 100 : 0
   }));
   const dq = await runMatchQuery(matchId, true);
@@ -17775,6 +17783,7 @@ resultsRoutes.get("/matches/:matchId/results/divisions", async (c) => {
       ...r,
       position: i + 1,
       match_points: Number(r.match_points),
+      hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
       match_percent: highestPoints > 0 ? Math.round(Number(r.match_points) / highestPoints * 1e4) / 100 : 0
     }));
   }
@@ -17932,36 +17941,14 @@ resultsRoutes.get("/matches/:matchId/results/categories", async (c) => {
   const categoryResults = {};
   for (const cat of categories) {
     const query = `
-      WITH stage_totals AS (
-        SELECT
-          ss.registration_id,
-          SUM(ss.stage_points) as match_points,
-          SUM(ss.procedural_count) as procedurals,
-          SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time
-        FROM stage_scores ss
-        JOIN stages st ON st.id = ss.stage_id
-        WHERE ss.match_id = $1
-        GROUP BY ss.registration_id
-      ),
-      target_totals AS (
-        SELECT
-          ss.registration_id,
-          SUM(ts.alpha) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = TRUE THEN 1 ELSE 0 END), 0) as alpha,
-          SUM(ts.charlie) as charlie,
-          SUM(ts.delta) as delta,
-          SUM(ts.miss) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = FALSE THEN 1 ELSE 0 END), 0) as miss,
-          SUM(ts.no_shoot_hits) as no_shoot
-        FROM stage_scores ss
-        JOIN target_scores ts ON ts.stage_score_id = ss.id
-        WHERE ss.match_id = $1
-        GROUP BY ss.registration_id
-      )
+      ${MATCH_TOTALS_CTE}
       SELECT
         mr.id as registration_id,
         s.first_name, s.last_name,
         COALESCE(mr.division, s.division) as division,
         COALESCE(mr.power_factor, s.power_factor) as power_factor,
         COALESCE(st.match_points, 0) as match_points,
+        ${MATCH_HF_COLUMN}
         COALESCE(st.total_time, 0) as time,
         COALESCE(tt.alpha, 0) as alpha,
         COALESCE(tt.charlie, 0) as charlie,
@@ -17991,6 +17978,7 @@ resultsRoutes.get("/matches/:matchId/results/categories", async (c) => {
           ...r,
           position: i + 1,
           match_points: Number(r.match_points),
+          hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
           match_percent: highest > 0 ? Math.round(Number(r.match_points) / highest * 1e4) / 100 : 0
         }));
       }
@@ -18015,36 +18003,14 @@ resultsRoutes.get("/matches/:matchId/results/tags", async (c) => {
   const tagResults = {};
   for (const { tag } of tags) {
     const query = `
-      WITH stage_totals AS (
-        SELECT
-          ss.registration_id,
-          SUM(ss.stage_points) as match_points,
-          SUM(ss.procedural_count) as procedurals,
-          SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time
-        FROM stage_scores ss
-        JOIN stages st ON st.id = ss.stage_id
-        WHERE ss.match_id = $1
-        GROUP BY ss.registration_id
-      ),
-      target_totals AS (
-        SELECT
-          ss.registration_id,
-          SUM(ts.alpha) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = TRUE THEN 1 ELSE 0 END), 0) as alpha,
-          SUM(ts.charlie) as charlie,
-          SUM(ts.delta) as delta,
-          SUM(ts.miss) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = FALSE THEN 1 ELSE 0 END), 0) as miss,
-          SUM(ts.no_shoot_hits) as no_shoot
-        FROM stage_scores ss
-        JOIN target_scores ts ON ts.stage_score_id = ss.id
-        WHERE ss.match_id = $1
-        GROUP BY ss.registration_id
-      )
+      ${MATCH_TOTALS_CTE}
       SELECT
         mr.id as registration_id,
         s.first_name, s.last_name,
         COALESCE(mr.division, s.division) as division,
         COALESCE(mr.power_factor, s.power_factor) as power_factor,
         COALESCE(st.match_points, 0) as match_points,
+        ${MATCH_HF_COLUMN}
         COALESCE(st.total_time, 0) as time,
         COALESCE(tt.alpha, 0) as alpha,
         COALESCE(tt.charlie, 0) as charlie,
@@ -18074,6 +18040,7 @@ resultsRoutes.get("/matches/:matchId/results/tags", async (c) => {
           ...r,
           position: i + 1,
           match_points: Number(r.match_points),
+          hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
           match_percent: highest > 0 ? Math.round(Number(r.match_points) / highest * 1e4) / 100 : 0
         }));
       }
@@ -22640,23 +22607,23 @@ function toNumber(str, options = {}) {
       if (!options.leadingZeros && (leadingZeros.length > 1 || leadingZeros.length === 1 && !decimalAdjacentToLeadingZeros)) {
         return str;
       } else {
-        const num = Number(trimmedStr);
-        const parsedStr = String(num);
-        if (num === 0) return num;
+        const num2 = Number(trimmedStr);
+        const parsedStr = String(num2);
+        if (num2 === 0) return num2;
         if (parsedStr.search(/[eE]/) !== -1) {
-          if (options.eNotation) return num;
+          if (options.eNotation) return num2;
           else return str;
         } else if (trimmedStr.indexOf(".") !== -1) {
-          if (parsedStr === "0") return num;
-          else if (parsedStr === numTrimmedByZeros) return num;
-          else if (parsedStr === `${sign}${numTrimmedByZeros}`) return num;
+          if (parsedStr === "0") return num2;
+          else if (parsedStr === numTrimmedByZeros) return num2;
+          else if (parsedStr === `${sign}${numTrimmedByZeros}`) return num2;
           else return str;
         }
         let n = leadingZeros ? numTrimmedByZeros : trimmedStr;
         if (leadingZeros) {
-          return n === parsedStr || sign + n === parsedStr ? num : str;
+          return n === parsedStr || sign + n === parsedStr ? num2 : str;
         } else {
-          return n === parsedStr || n === sign + parsedStr ? num : str;
+          return n === parsedStr || n === sign + parsedStr ? num2 : str;
         }
       }
     } else {
@@ -22709,13 +22676,13 @@ function parse_int(numStr, base) {
   else if (window && window.parseInt) return window.parseInt(numStr, base);
   else throw new Error("parseInt, Number.parseInt, window.parseInt are not supported");
 }
-function handleInfinity(str, num, options) {
-  const isPositive = num === Infinity;
+function handleInfinity(str, num2, options) {
+  const isPositive = num2 === Infinity;
   switch (options.infinity.toLowerCase()) {
     case "null":
       return null;
     case "infinity":
-      return num;
+      return num2;
     // Return Infinity or -Infinity
     case "string":
       return isPositive ? "Infinity" : "-Infinity";
@@ -30486,6 +30453,471 @@ auditLogRoutes.get("/audit", async (c) => {
   }
 });
 
+// ../backend/src/routes/cups.ts
+init_client();
+var cupRoutes = new Hono2();
+var HF_SCORING_TYPES = ["comstock", "virginia", "hit_factor"];
+var CUP_CATEGORIES = /* @__PURE__ */ new Set(["regular", "junior", "senior", "super_senior", "lady"]);
+var CUP_TOP_POSITIONS = 3;
+function isScoringMode(v) {
+  return v === "hit_factor" || v === "points";
+}
+function num(v) {
+  return v == null ? 0 : Number(v);
+}
+function round2(v) {
+  return Math.round(v * 100) / 100;
+}
+function round4(v) {
+  return Math.round(v * 1e4) / 1e4;
+}
+cupRoutes.get("/", async (c) => {
+  const cups = await sql`
+    SELECT c.id, c.name, c.scoring_mode, c.minimum_matches, c.minimum_participants, c.selected_categories,
+           c.created_at, c.updated_at,
+           (SELECT COUNT(*) FROM cup_matches cm WHERE cm.cup_id = c.id) as match_count
+    FROM cups c
+    ORDER BY c.created_at DESC
+  `;
+  return c.json(cups.map((cup) => ({
+    ...cup,
+    match_count: Number(cup.match_count),
+    minimum_matches: cup.minimum_matches != null ? Number(cup.minimum_matches) : null,
+    minimum_participants: cup.minimum_participants != null ? Number(cup.minimum_participants) : null,
+    selected_categories: Array.isArray(cup.selected_categories) ? cup.selected_categories : null
+  })));
+});
+function parseCategories(value) {
+  if (value == null) return { ok: true, value: null };
+  if (!Array.isArray(value) || value.some((v) => typeof v !== "string")) {
+    return { ok: false, error: "selected_categories must be an array of category names or null" };
+  }
+  const invalid = value.find((v) => !CUP_CATEGORIES.has(v));
+  if (invalid != null) return { ok: false, error: `Unknown category: ${invalid}` };
+  const unique = Array.from(new Set(value));
+  return { ok: true, value: unique.length > 0 ? unique : null };
+}
+function parseCupBody(body) {
+  const { name, scoring_mode, minimum_matches, minimum_participants, selected_categories } = body ?? {};
+  if (name == null || typeof name !== "string" || !name.trim()) {
+    return { ok: false, error: "name is required" };
+  }
+  if (!isScoringMode(scoring_mode)) {
+    return { ok: false, error: 'scoring_mode must be "hit_factor" or "points"' };
+  }
+  if (minimum_matches != null && (!Number.isInteger(minimum_matches) || Number(minimum_matches) < 1)) {
+    return { ok: false, error: "minimum_matches must be a positive integer or null" };
+  }
+  if (minimum_participants != null && (!Number.isInteger(minimum_participants) || Number(minimum_participants) < 1)) {
+    return { ok: false, error: "minimum_participants must be a positive integer or null" };
+  }
+  const categories = parseCategories(selected_categories);
+  if (!categories.ok) return categories;
+  return {
+    ok: true,
+    name: name.trim(),
+    scoring_mode,
+    minimum_matches: minimum_matches != null ? Number(minimum_matches) : null,
+    minimum_participants: minimum_participants != null ? Number(minimum_participants) : null,
+    selected_categories: categories.value
+  };
+}
+async function getMatchesOf(cupId) {
+  return sql`
+    SELECT m.id, m.name, m.date, m.organization, m.firearm_type
+    FROM cup_matches cm
+    JOIN matches m ON m.id = cm.match_id
+    WHERE cm.cup_id = ${cupId}
+    ORDER BY m.date, m.created_at
+  `;
+}
+async function assertHfCompatible(tx, matchIds, scoring_mode, currentIds = []) {
+  if (scoring_mode !== "hit_factor") return null;
+  const ids = Array.from(/* @__PURE__ */ new Set([...currentIds, ...matchIds]));
+  if (ids.length === 0) return null;
+  const incompatible = await tx`
+    SELECT m.id, m.name
+    FROM matches m
+    WHERE m.id = ANY(${ids})
+      AND NOT EXISTS (
+        SELECT 1 FROM stages st
+        WHERE st.match_id = m.id
+          AND st.scoring_type = ANY(${HF_SCORING_TYPES})
+      )
+    ORDER BY m.date
+  `;
+  if (incompatible.length > 0) {
+    return `Match "${incompatible[0].name}" has no hit-factor stages and cannot be part of a Hit Factor cup.`;
+  }
+  return null;
+}
+cupRoutes.post("/", async (c) => {
+  const body = await c.req.json();
+  const parsed = parseCupBody(body);
+  if (!parsed.ok) return c.json({ error: parsed.error }, 400);
+  const matchIds = Array.isArray(body.matchIds) ? body.matchIds.filter((id) => typeof id === "string") : [];
+  try {
+    const cup = await sql.begin(async (tx) => {
+      const incompat = await assertHfCompatible(tx, matchIds, parsed.scoring_mode);
+      if (incompat) throw new Error(incompat);
+      const [created] = await tx`
+        INSERT INTO cups (name, scoring_mode, minimum_matches, minimum_participants, selected_categories)
+        VALUES (${parsed.name}, ${parsed.scoring_mode}, ${parsed.minimum_matches}, ${parsed.minimum_participants}, ${parsed.selected_categories})
+        RETURNING id, name, scoring_mode, minimum_matches, minimum_participants, selected_categories, created_at, updated_at
+      `;
+      for (const matchId of matchIds) {
+        await tx`
+          INSERT INTO cup_matches (cup_id, match_id)
+          VALUES (${created.id}, ${matchId})
+          ON CONFLICT (cup_id, match_id) DO NOTHING
+        `;
+      }
+      return created;
+    });
+    await audit(c, "cup.create", `cups:${cup.id}`, { name: cup.name, match_count: matchIds.length });
+    return c.json(cup, 201);
+  } catch (err) {
+    return c.json({ error: err.message || "Failed to create cup" }, 400);
+  }
+});
+cupRoutes.get("/:id", async (c) => {
+  const id = c.req.param("id");
+  const [cup] = await sql`SELECT * FROM cups WHERE id = ${id}`;
+  if (!cup) return c.json({ error: "Cup not found" }, 404);
+  const matches = await getMatchesOf(id);
+  return c.json({
+    ...cup,
+    minimum_matches: cup.minimum_matches != null ? Number(cup.minimum_matches) : null,
+    minimum_participants: cup.minimum_participants != null ? Number(cup.minimum_participants) : null,
+    selected_categories: Array.isArray(cup.selected_categories) ? cup.selected_categories : null,
+    matches
+  });
+});
+cupRoutes.put("/:id", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  const [existing] = await sql`SELECT * FROM cups WHERE id = ${id}`;
+  if (!existing) return c.json({ error: "Cup not found" }, 404);
+  const name = body.name !== void 0 ? typeof body.name === "string" && body.name.trim() ? body.name.trim() : null : existing.name;
+  if (name === null) return c.json({ error: "name is required" }, 400);
+  const scoring_mode = body.scoring_mode !== void 0 ? isScoringMode(body.scoring_mode) ? body.scoring_mode : null : existing.scoring_mode;
+  if (scoring_mode === null) return c.json({ error: 'scoring_mode must be "hit_factor" or "points"' }, 400);
+  let minimum_matches = existing.minimum_matches != null ? Number(existing.minimum_matches) : null;
+  if (body.minimum_matches !== void 0) {
+    if (body.minimum_matches === null) {
+      minimum_matches = null;
+    } else if (Number.isInteger(body.minimum_matches) && Number(body.minimum_matches) >= 1) {
+      minimum_matches = Number(body.minimum_matches);
+    } else {
+      return c.json({ error: "minimum_matches must be a positive integer or null" }, 400);
+    }
+  }
+  let minimum_participants = existing.minimum_participants != null ? Number(existing.minimum_participants) : null;
+  if (body.minimum_participants !== void 0) {
+    if (body.minimum_participants === null) {
+      minimum_participants = null;
+    } else if (Number.isInteger(body.minimum_participants) && Number(body.minimum_participants) >= 1) {
+      minimum_participants = Number(body.minimum_participants);
+    } else {
+      return c.json({ error: "minimum_participants must be a positive integer or null" }, 400);
+    }
+  }
+  let selected_categories = Array.isArray(existing.selected_categories) && existing.selected_categories.length > 0 ? existing.selected_categories : null;
+  if (body.selected_categories !== void 0) {
+    const parsedCategories = parseCategories(body.selected_categories);
+    if (!parsedCategories.ok) return c.json({ error: parsedCategories.error }, 400);
+    selected_categories = parsedCategories.value;
+  }
+  try {
+    await sql.begin(async (tx) => {
+      if (scoring_mode === "hit_factor") {
+        const current = await tx`
+          SELECT m.id, m.name
+          FROM cup_matches cm JOIN matches m ON m.id = cm.match_id
+          WHERE cm.cup_id = ${id}
+        `;
+        const incompat = await assertHfCompatible(tx, [], "hit_factor", current.map((m) => m.id));
+        if (incompat) throw new Error(incompat);
+      }
+      return tx`
+        UPDATE cups
+        SET name = ${name},
+            scoring_mode = ${scoring_mode},
+            minimum_matches = ${minimum_matches},
+            minimum_participants = ${minimum_participants},
+            selected_categories = ${selected_categories},
+            updated_at = NOW()
+        WHERE id = ${id}
+        RETURNING id, name, scoring_mode, minimum_matches, minimum_participants, selected_categories, created_at, updated_at
+      `;
+    });
+    const [updated] = await sql`SELECT * FROM cups WHERE id = ${id}`;
+    await audit(c, "cup.update", `cups:${id}`, { name });
+    return c.json(updated);
+  } catch (err) {
+    return c.json({ error: err.message || "Failed to update cup" }, 400);
+  }
+});
+cupRoutes.delete("/:id", async (c) => {
+  const id = c.req.param("id");
+  const [existing] = await sql`SELECT name FROM cups WHERE id = ${id}`;
+  if (!existing) return c.json({ error: "Cup not found" }, 404);
+  await sql`DELETE FROM cups WHERE id = ${id}`;
+  await audit(c, "cup.delete", `cups:${id}`, { name: existing.name });
+  return c.json({ deleted: true });
+});
+cupRoutes.post("/:id/matches", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json();
+  const matchIds = Array.isArray(body.matchIds) ? body.matchIds.filter((mid) => typeof mid === "string") : [];
+  if (matchIds.length === 0) return c.json({ error: "matchIds is required" }, 400);
+  const [cup] = await sql`SELECT * FROM cups WHERE id = ${id}`;
+  if (!cup) return c.json({ error: "Cup not found" }, 404);
+  try {
+    const result = await sql.begin(async (tx) => {
+      const current = await tx`SELECT match_id FROM cup_matches WHERE cup_id = ${id}`;
+      const currentIds = current.map((r) => r.match_id);
+      const incompat = await assertHfCompatible(tx, matchIds, cup.scoring_mode, currentIds);
+      if (incompat) throw new Error(incompat);
+      for (const matchId of matchIds) {
+        await tx`
+          INSERT INTO cup_matches (cup_id, match_id)
+          VALUES (${id}, ${matchId})
+          ON CONFLICT (cup_id, match_id) DO NOTHING
+        `;
+      }
+      return true;
+    });
+    await audit(c, "cup.match.add", `cups:${id}`, { match_count: matchIds.length });
+    return c.json({ success: result });
+  } catch (err) {
+    return c.json({ error: err.message || "Failed to add matches" }, 400);
+  }
+});
+cupRoutes.delete("/:id/matches/:matchId", async (c) => {
+  const { id, matchId } = c.req.param();
+  await sql`DELETE FROM cup_matches WHERE cup_id = ${id} AND match_id = ${matchId}`;
+  await audit(c, "cup.match.remove", `cups:${id}`, { match_id: matchId });
+  return c.json({ removed: true });
+});
+function compareStandings(a, b2) {
+  if (b2.score !== a.score) return b2.score - a.score;
+  const n = Math.max(a.individual.length, b2.individual.length);
+  for (let i = 0; i < n; i++) {
+    const av = a.individual[i] ?? -1;
+    const bv = b2.individual[i] ?? -1;
+    if (bv !== av) return bv - av;
+  }
+  const nameCmp = `${a.lastName} ${a.firstName}`.localeCompare(`${b2.lastName} ${b2.firstName}`);
+  if (nameCmp !== 0) return nameCmp;
+  return a.shooterId.localeCompare(b2.shooterId);
+}
+function rankRows(rows, bestScore, mode) {
+  return rows.map((r, i) => ({
+    ...r,
+    position: i + 1,
+    match_percent: bestScore > 0 ? round2(r.score / bestScore * 100) : 0,
+    ...mode === "hit_factor" ? { hit_factor: round4(r.score), match_points: null } : { match_points: round2(r.score), hit_factor: null }
+  }));
+}
+function rankGroup(rows, mode, minParticipants) {
+  if (minParticipants != null && rows.length < minParticipants) return null;
+  return rankRows(rows.slice(), rows[0].score, mode).slice(0, CUP_TOP_POSITIONS);
+}
+cupRoutes.get("/:id/results", async (c) => {
+  const id = c.req.param("id");
+  const [cup] = await sql`SELECT * FROM cups WHERE id = ${id}`;
+  if (!cup) return c.json({ error: "Cup not found" }, 404);
+  const mode = cup.scoring_mode;
+  const matches = await sql`
+    SELECT m.id, m.name, m.date, m.organization, m.firearm_type
+    FROM cup_matches cm
+    JOIN matches m ON m.id = cm.match_id
+    WHERE cm.cup_id = ${id}
+    ORDER BY m.date, m.created_at
+  `;
+  const minParticipants = cup.minimum_participants != null ? Number(cup.minimum_participants) : null;
+  const selectedCategories = Array.isArray(cup.selected_categories) && cup.selected_categories.length > 0 ? cup.selected_categories : null;
+  const emptyPayload = {
+    cup: { id: cup.id, name: cup.name },
+    scoring_mode: mode,
+    minimum_matches: cup.minimum_matches != null ? Number(cup.minimum_matches) : null,
+    minimum_participants: minParticipants,
+    selected_categories: selectedCategories,
+    matches: [],
+    results: { byDivision: {}, overall: [], byCategory: {}, byTag: {} }
+  };
+  if (matches.length === 0) return c.json(emptyPayload);
+  const required = cup.minimum_matches != null ? Number(cup.minimum_matches) : Math.floor(matches.length / 2) + 1;
+  const matchIds = matches.map((m) => m.id);
+  const matchIndex = new Map(matchIds.map((mid, i) => [mid, i]));
+  const rows = await sql`
+    WITH stage_totals AS (
+      SELECT ss.registration_id, ss.match_id,
+        SUM(ss.stage_points) as match_points,
+        SUM(ss.procedural_count) as procedurals,
+        SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time,
+        SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.net_points ELSE 0 END) as hf_net_points,
+        SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.time ELSE 0 END) as hf_time,
+        COUNT(ss.id) FILTER (WHERE ss.is_dnf = FALSE) as scored_stages
+      FROM stage_scores ss
+      JOIN stages st ON st.id = ss.stage_id
+      WHERE ss.match_id = ANY(${matchIds})
+      GROUP BY ss.registration_id, ss.match_id
+    ),
+    target_totals AS (
+      SELECT ss.registration_id, ss.match_id,
+        SUM(ts.alpha) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = TRUE THEN 1 ELSE 0 END), 0) as alpha,
+        SUM(ts.charlie) as charlie,
+        SUM(ts.delta) as delta,
+        SUM(ts.miss) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = FALSE THEN 1 ELSE 0 END), 0) as miss,
+        SUM(ts.no_shoot_hits) as no_shoot
+      FROM stage_scores ss
+      JOIN target_scores ts ON ts.stage_score_id = ss.id
+      WHERE ss.match_id = ANY(${matchIds})
+      GROUP BY ss.registration_id, ss.match_id
+    )
+    SELECT
+      mr.match_id, mr.shooter_id,
+      s.first_name, s.last_name, s.tag,
+      COALESCE(mr.division, s.division) as division,
+      COALESCE(mr.category, s.category) as category,
+      mr.is_dq,
+      COALESCE(st.match_points, 0) as match_points,
+      CASE WHEN COALESCE(st.hf_time, 0) > 0 THEN ROUND(st.hf_net_points / st.hf_time, 4) ELSE NULL END as match_hf,
+      COALESCE(st.total_time, 0) as time,
+      COALESCE(tt.alpha, 0) as alpha,
+      COALESCE(tt.charlie, 0) as charlie,
+      COALESCE(tt.delta, 0) as delta,
+      COALESCE(tt.miss, 0) as miss,
+      COALESCE(tt.no_shoot, 0) as no_shoot,
+      COALESCE(st.procedurals, 0) as procedurals,
+      COALESCE(st.scored_stages, 0) as scored_stages
+    FROM match_registrations mr
+    JOIN shooters s ON s.id = mr.shooter_id
+    JOIN cup_matches cm ON cm.match_id = mr.match_id
+    LEFT JOIN stage_totals st ON st.registration_id = mr.id AND st.match_id = mr.match_id
+    LEFT JOIN target_totals tt ON tt.registration_id = mr.id AND tt.match_id = mr.match_id
+    WHERE cm.cup_id = ${id}
+  `;
+  const aggs = rows.map((r) => ({
+    matchId: r.match_id,
+    matchIndex: matchIndex.get(r.match_id) ?? 0,
+    shooterId: r.shooter_id,
+    firstName: r.first_name,
+    lastName: r.last_name,
+    tag: r.tag || null,
+    division: r.division || "unknown",
+    category: r.category || "regular",
+    valid: !r.is_dq && num(r.scored_stages) > 0,
+    metric: mode === "hit_factor" ? r.match_hf != null ? num(r.match_hf) : 0 : num(r.match_points),
+    matchPoints: num(r.match_points),
+    matchHf: num(r.match_hf),
+    time: num(r.time),
+    alpha: num(r.alpha),
+    charlie: num(r.charlie),
+    delta: num(r.delta),
+    miss: num(r.miss),
+    noShoot: num(r.no_shoot),
+    procedurals: num(r.procedurals)
+  }));
+  const shooters = /* @__PURE__ */ new Map();
+  for (const agg of aggs) {
+    if (!shooters.has(agg.shooterId)) shooters.set(agg.shooterId, { rows: [] });
+    shooters.get(agg.shooterId).rows.push(agg);
+  }
+  const qualified = [];
+  for (const [shooterId, { rows: shooterRows }] of shooters) {
+    const firstRow = shooterRows[0];
+    const name = { shooterId, first_name: firstRow.firstName, last_name: firstRow.lastName };
+    const tag = shooterRows.find((r) => r.tag)?.tag ?? null;
+    const earliest = shooterRows.reduce((a, b2) => a.matchIndex <= b2.matchIndex ? a : b2);
+    const category = earliest.category;
+    const byDivision2 = /* @__PURE__ */ new Map();
+    for (const r of shooterRows) {
+      if (!byDivision2.has(r.division)) byDivision2.set(r.division, []);
+      byDivision2.get(r.division).push(r);
+    }
+    for (const [division, divRows] of byDivision2) {
+      const validRows = divRows.filter((r) => r.valid).sort((a, b2) => b2.metric - a.metric || a.matchIndex - b2.matchIndex);
+      const base = { ...name, tag, division, category };
+      if (validRows.length >= required) {
+        const counted = validRows.slice(0, required);
+        const score = counted.reduce((sum, r) => sum + r.metric, 0);
+        const individual = counted.slice().sort((a, b2) => b2.metric - a.metric).map((r) => r.metric);
+        qualified.push({
+          ...base,
+          matches_count: validRows.length,
+          matches_required: required,
+          time: round2(counted.reduce((s, r) => s + r.time, 0)),
+          alpha: counted.reduce((s, r) => s + r.alpha, 0),
+          charlie: counted.reduce((s, r) => s + r.charlie, 0),
+          delta: counted.reduce((s, r) => s + r.delta, 0),
+          miss: counted.reduce((s, r) => s + r.miss, 0),
+          no_shoot: counted.reduce((s, r) => s + r.noShoot, 0),
+          procedurals: counted.reduce((s, r) => s + r.procedurals, 0),
+          score,
+          individual
+        });
+      }
+    }
+  }
+  qualified.sort(compareStandings);
+  const byDivision = {};
+  for (const row of qualified) {
+    if (!byDivision[row.division]) byDivision[row.division] = [];
+    byDivision[row.division].push(row);
+  }
+  const byDivisionOut = {};
+  for (const [division, rowsOfDiv] of Object.entries(byDivision)) {
+    const ranked = rankGroup(rowsOfDiv, mode, minParticipants);
+    if (ranked) byDivisionOut[division] = ranked;
+  }
+  const overallBest = qualified.length > 0 ? qualified[0].score : 0;
+  const overall = rankRows(qualified.slice(), overallBest, mode).slice(0, CUP_TOP_POSITIONS);
+  const byCategory = {};
+  for (const row of qualified) {
+    if (!byCategory[row.category]) byCategory[row.category] = {};
+    if (!byCategory[row.category][row.division]) byCategory[row.category][row.division] = [];
+    byCategory[row.category][row.division].push(row);
+  }
+  const byCategoryOut = {};
+  for (const [cat, divisions] of Object.entries(byCategory)) {
+    if (selectedCategories && !selectedCategories.includes(cat)) continue;
+    for (const [division, rowsOfDiv] of Object.entries(divisions)) {
+      const ranked = rankGroup(rowsOfDiv, mode, minParticipants);
+      if (!ranked) continue;
+      if (!byCategoryOut[cat]) byCategoryOut[cat] = {};
+      byCategoryOut[cat][division] = ranked;
+    }
+  }
+  const byTag = {};
+  for (const row of qualified) {
+    if (!row.tag) continue;
+    if (!byTag[row.tag]) byTag[row.tag] = {};
+    if (!byTag[row.tag][row.division]) byTag[row.tag][row.division] = [];
+    byTag[row.tag][row.division].push(row);
+  }
+  const byTagOut = {};
+  for (const [tag, divisions] of Object.entries(byTag)) {
+    for (const [division, rowsOfDiv] of Object.entries(divisions)) {
+      const ranked = rankGroup(rowsOfDiv, mode, minParticipants);
+      if (!ranked) continue;
+      if (!byTagOut[tag]) byTagOut[tag] = {};
+      byTagOut[tag][division] = ranked;
+    }
+  }
+  return c.json({
+    cup: { id: cup.id, name: cup.name },
+    scoring_mode: mode,
+    minimum_matches: required,
+    minimum_participants: minParticipants,
+    selected_categories: selectedCategories,
+    matches,
+    results: { byDivision: byDivisionOut, overall, byCategory: byCategoryOut, byTag: byTagOut }
+  });
+});
+
 // ../backend/src/app.ts
 init_env();
 var app = new Hono2();
@@ -30571,7 +31003,28 @@ app.route("/api", stageRoutes);
 app.use("/api/shooters", authMiddleware);
 app.use("/api/shooters", requireAdmin);
 app.route("/api/shooters", shooterRoutes);
-app.use("/api/matches/:matchId/registrations", authMiddleware);
+app.use("/api/matches/:matchId/registrations/*", async (c, next) => {
+  const method = c.req.method;
+  const path5 = c.req.path;
+  const isBase = /\/registrations$/.test(path5);
+  if (method === "GET" && isBase) {
+    if (!c.req.header("Authorization")) {
+      c.set("authRole", "anonymous");
+      return next();
+    }
+    return authMiddleware(c, next);
+  }
+  if (method === "PUT" && (path5.endsWith("/dq") || path5.endsWith("/undq"))) {
+    return authMiddleware(c, next);
+  }
+  const authRes = await authMiddleware(c, async () => {
+  });
+  if (authRes) return authRes;
+  if (c.get("authRole") !== "admin") {
+    return c.json({ error: "Admin access required." }, 401);
+  }
+  return next();
+});
 app.route("/api", registrationRoutes);
 app.use("/api/matches/:matchId/stages/:stageId/scores/*", authMiddleware);
 app.use("/api/matches/:matchId/stages/:stageId/scores/*", stageAccessMiddleware);
@@ -30596,6 +31049,9 @@ app.route("/api/import", winmssImportRoutes);
 app.use("/api/audit", authMiddleware);
 app.use("/api/audit", requireAdmin);
 app.route("/api", auditLogRoutes);
+app.use("/api/cups", authMiddleware);
+app.use("/api/cups", requireAdmin);
+app.route("/api/cups", cupRoutes);
 app.use("/api/matches/import", authMiddleware);
 app.use("/api/matches/import", requireAdmin);
 app.use("/api/matches/import-psc", authMiddleware);

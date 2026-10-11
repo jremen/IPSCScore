@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type TabId = 'matches' | 'stages' | 'shooters' | 'registration' | 'scoring' | 'results' | 'squads';
+export type TabId = 'matches' | 'cups' | 'stages' | 'shooters' | 'registration' | 'scoring' | 'results' | 'squads';
 export type Language = 'en' | 'sk';
 export type ThemeMode = 'light' | 'dark' | 'eink';
 

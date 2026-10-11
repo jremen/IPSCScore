@@ -11,6 +11,7 @@ export interface OverallResult {
   is_dq: boolean;
   match_points: number;
   match_percent: number;
+  hit_factor?: number | null;
   position: number;
 }
 

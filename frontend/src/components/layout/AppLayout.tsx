@@ -7,6 +7,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { api } from '../../services/api';
 import * as offlineDB from '../../services/offlineDB';
 import Matches from '../match/MatchList';
+import Cups from '../cup/CupList';
 import Stages from '../stage/StageList';
 import ShooterDatabase from '../shooter/ShooterDatabase';
 import Registration from '../registration/MatchRegistration';
@@ -139,7 +140,7 @@ export default function AppLayout() {
           logout();
         }
       })();
-    } else if (isAuthenticated && isAdmin && !activeMatchId && activeTab !== 'matches') {
+    } else if (isAuthenticated && isAdmin && !activeMatchId && activeTab !== 'matches' && activeTab !== 'cups') {
       // Admin: auto-select the running match when entering any tab with no match selected.
       // Previously this was restricted to scoring/results, but Stages and
       // Registration also need the current match to render anything useful.
@@ -234,6 +235,7 @@ export default function AppLayout() {
       <TabBar />
       <main className={`flex-1 min-h-0 ${isScoringTab ? 'overflow-hidden lg:overflow-auto' : 'overflow-auto'}`}>
         {activeTab === 'matches' && <Matches />}
+        {activeTab === 'cups' && <Cups />}
         {activeTab === 'stages' && <Stages />}
         {activeTab === 'shooters' && <ShooterDatabase />}
         {activeTab === 'registration' && <Registration />}

@@ -6,16 +6,17 @@ export const resultsRoutes = new Hono();
 // ── Helper: build match-level CTE query (avoids JOIN fan-out) ───────
 // CTE pre-aggregates stage_scores (per-registration) separately from
 // target_scores (per-registration) so SUM(stage_points) isn't multiplied
-// by the number of target rows.
-function matchCte(isDq: boolean) {
-  const dqFilter = isDq ? 'AND mr.is_dq = TRUE' : 'AND mr.is_dq = FALSE';
-  return `
+// by the number of target rows. Match-level hit_factor aggregates only
+// hit-factor scoring types, so it stays NULL when none apply.
+const MATCH_TOTALS_CTE = `
     WITH stage_totals AS (
       SELECT
         ss.registration_id,
         SUM(ss.stage_points) as match_points,
         SUM(ss.procedural_count) as procedurals,
-        SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time
+        SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time,
+        SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.net_points ELSE 0 END) as hf_net_points,
+        SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.time ELSE 0 END) as hf_time
       FROM stage_scores ss
       JOIN stages st ON st.id = ss.stage_id
       WHERE ss.match_id = $1
@@ -34,6 +35,14 @@ function matchCte(isDq: boolean) {
       WHERE ss.match_id = $1
       GROUP BY ss.registration_id
     )
+`;
+
+const MATCH_HF_COLUMN = `CASE WHEN COALESCE(st.hf_time, 0) > 0 THEN ROUND(st.hf_net_points / st.hf_time, 4) ELSE NULL END as hit_factor,`;
+
+function matchCte(isDq: boolean) {
+  const dqFilter = isDq ? 'AND mr.is_dq = TRUE' : 'AND mr.is_dq = FALSE';
+  return `
+    ${MATCH_TOTALS_CTE}
     SELECT
       mr.id as registration_id,
       s.first_name, s.last_name,
@@ -44,6 +53,7 @@ function matchCte(isDq: boolean) {
       mr.is_dq,
       ${isDq ? 'mr.dq_reason,' : ''}
       COALESCE(st.match_points, 0) as match_points,
+      ${MATCH_HF_COLUMN}
       COALESCE(st.total_time, 0) as time,
       COALESCE(tt.alpha, 0) as alpha,
       COALESCE(tt.charlie, 0) as charlie,
@@ -77,6 +87,7 @@ resultsRoutes.get('/matches/:matchId/results/overall', async (c) => {
     ...r,
     position: i + 1,
     match_points: Number(r.match_points),
+    hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
     match_percent: highestPoints > 0 ? Math.round((Number(r.match_points) / highestPoints) * 10000) / 100 : 0,
   }));
 
@@ -112,6 +123,7 @@ resultsRoutes.get('/matches/:matchId/results/divisions', async (c) => {
       ...r,
       position: i + 1,
       match_points: Number(r.match_points),
+      hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
       match_percent: highestPoints > 0 ? Math.round((Number(r.match_points) / highestPoints) * 10000) / 100 : 0,
     }));
   }
@@ -289,36 +301,14 @@ resultsRoutes.get('/matches/:matchId/results/categories', async (c) => {
 
   for (const cat of categories) {
     const query = `
-      WITH stage_totals AS (
-        SELECT
-          ss.registration_id,
-          SUM(ss.stage_points) as match_points,
-          SUM(ss.procedural_count) as procedurals,
-          SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time
-        FROM stage_scores ss
-        JOIN stages st ON st.id = ss.stage_id
-        WHERE ss.match_id = $1
-        GROUP BY ss.registration_id
-      ),
-      target_totals AS (
-        SELECT
-          ss.registration_id,
-          SUM(ts.alpha) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = TRUE THEN 1 ELSE 0 END), 0) as alpha,
-          SUM(ts.charlie) as charlie,
-          SUM(ts.delta) as delta,
-          SUM(ts.miss) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = FALSE THEN 1 ELSE 0 END), 0) as miss,
-          SUM(ts.no_shoot_hits) as no_shoot
-        FROM stage_scores ss
-        JOIN target_scores ts ON ts.stage_score_id = ss.id
-        WHERE ss.match_id = $1
-        GROUP BY ss.registration_id
-      )
+      ${MATCH_TOTALS_CTE}
       SELECT
         mr.id as registration_id,
         s.first_name, s.last_name,
         COALESCE(mr.division, s.division) as division,
         COALESCE(mr.power_factor, s.power_factor) as power_factor,
         COALESCE(st.match_points, 0) as match_points,
+        ${MATCH_HF_COLUMN}
         COALESCE(st.total_time, 0) as time,
         COALESCE(tt.alpha, 0) as alpha,
         COALESCE(tt.charlie, 0) as charlie,
@@ -350,6 +340,7 @@ resultsRoutes.get('/matches/:matchId/results/categories', async (c) => {
           ...r,
           position: i + 1,
           match_points: Number(r.match_points),
+          hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
           match_percent: highest > 0 ? Math.round((Number(r.match_points) / highest) * 10000) / 100 : 0,
         }));
       }
@@ -381,36 +372,14 @@ resultsRoutes.get('/matches/:matchId/results/tags', async (c) => {
 
   for (const { tag } of tags) {
     const query = `
-      WITH stage_totals AS (
-        SELECT
-          ss.registration_id,
-          SUM(ss.stage_points) as match_points,
-          SUM(ss.procedural_count) as procedurals,
-          SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time
-        FROM stage_scores ss
-        JOIN stages st ON st.id = ss.stage_id
-        WHERE ss.match_id = $1
-        GROUP BY ss.registration_id
-      ),
-      target_totals AS (
-        SELECT
-          ss.registration_id,
-          SUM(ts.alpha) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = TRUE THEN 1 ELSE 0 END), 0) as alpha,
-          SUM(ts.charlie) as charlie,
-          SUM(ts.delta) as delta,
-          SUM(ts.miss) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = FALSE THEN 1 ELSE 0 END), 0) as miss,
-          SUM(ts.no_shoot_hits) as no_shoot
-        FROM stage_scores ss
-        JOIN target_scores ts ON ts.stage_score_id = ss.id
-        WHERE ss.match_id = $1
-        GROUP BY ss.registration_id
-      )
+      ${MATCH_TOTALS_CTE}
       SELECT
         mr.id as registration_id,
         s.first_name, s.last_name,
         COALESCE(mr.division, s.division) as division,
         COALESCE(mr.power_factor, s.power_factor) as power_factor,
         COALESCE(st.match_points, 0) as match_points,
+        ${MATCH_HF_COLUMN}
         COALESCE(st.total_time, 0) as time,
         COALESCE(tt.alpha, 0) as alpha,
         COALESCE(tt.charlie, 0) as charlie,
@@ -442,6 +411,7 @@ resultsRoutes.get('/matches/:matchId/results/tags', async (c) => {
           ...r,
           position: i + 1,
           match_points: Number(r.match_points),
+          hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
           match_percent: highest > 0 ? Math.round((Number(r.match_points) / highest) * 10000) / 100 : 0,
         }));
       }

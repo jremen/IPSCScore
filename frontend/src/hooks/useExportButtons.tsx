@@ -4,6 +4,8 @@ import { useUIStore } from "../stores/uiStore";
 import { useMatchStore } from "../stores/matchStore";
 import { useResultsStore } from "../stores/resultsStore";
 import { categoryLabel, divisionLabel } from "../utils/constants";
+import { formatHitFactor, hasHitFactor } from "../utils/hitFactor";
+import { nativeSaveAs, downloadBlob, formatDateLong, MARGIN, TITLE_SIZE, SUBTITLE_SIZE, TABLE_STYLE } from "../utils/exportUtils";
 import { useTranslation } from "react-i18next";
 import { loadPdfFonts, setBoldFont, setRegularFont } from "../utils/pdfFont";
 import { triggerPrint } from "../utils/print";
@@ -24,35 +26,6 @@ const TAB_SUFFIX: Record<ResultTab, string> = {
   byCategory: 'by_category',
   byTag: 'by_tag',
 };
-
-/** Try native Save As dialog (Chromium). Returns true if handled, false if cancelled. */
-async function nativeSaveAs(blob: Blob, defaultName: string, types: { description: string; accept: Record<string, string[]> }[]): Promise<boolean> {
-  if (!('showSaveFilePicker' in window)) return false;
-  try {
-    const handle = await (window as any).showSaveFilePicker({ suggestedName: defaultName, types });
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-    return true;
-  } catch (err: any) {
-    if (err.name === 'AbortError') return false;
-    return false;
-  }
-}
-
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function formatDateLong(dateStr: string | undefined): string {
-  if (!dateStr) return '';
-  return new Date(dateStr).toLocaleDateString(document.documentElement.lang || 'en', { year: 'numeric', month: 'long', day: 'numeric' });
-}
 
 const useExportButtons = (activeTab: ResultTab) => {
     const { t } = useTranslation();
@@ -99,11 +72,12 @@ const useExportButtons = (activeTab: ResultTab) => {
 
       switch (activeTab) {
         case 'byDivision': {
+          const hasHf = Object.values(s.divisionResults).some(hasHitFactor);
           for (const [division, results] of Object.entries(s.divisionResults).sort(([a], [b]) => a.localeCompare(b))) {
             lines.push(`--- ${divisionLabel(division)} ---`);
-            lines.push('Position;First Name;Last Name;Division;Category;Power Factor;A;C;D;M;NS;P;Time;Match Percent;Match Points');
+            lines.push(`Position;First Name;Last Name;Division;Category;Power Factor;A;C;D;M;NS;P;Time;Match Percent;${hasHf ? 'HF;' : ''}Match Points`);
             for (const r of results as any[]) {
-              lines.push(`${r.position};${r.first_name};${r.last_name};${divisionLabel(r.division || '')};${categoryLabel(r.category || '')};${r.power_factor || ''};${r.alpha};${r.charlie};${r.delta};${r.miss};${r.no_shoot};${r.procedurals};${r.time != null ? Number(r.time).toFixed(2) : ''};${Number(r.match_percent).toFixed(2)}%;${Number(r.match_points).toFixed(2)}`);
+              lines.push(`${r.position};${r.first_name};${r.last_name};${divisionLabel(r.division || '')};${categoryLabel(r.category || '')};${r.power_factor || ''};${r.alpha};${r.charlie};${r.delta};${r.miss};${r.no_shoot};${r.procedurals};${r.time != null ? Number(r.time).toFixed(2) : ''};${Number(r.match_percent).toFixed(2)}%${hasHf ? `;${formatHitFactor(r.hit_factor)}` : ''};${Number(r.match_points).toFixed(2)}`);
             }
             lines.push('');
           }
@@ -117,9 +91,10 @@ const useExportButtons = (activeTab: ResultTab) => {
           break;
         }
         case 'overall': {
-          lines.push('Position;First Name;Last Name;Division;Category;Power Factor;A;C;D;M;NS;P;Time;Match Percent;Match Points');
+          const hasHf = hasHitFactor(s.overallResults);
+          lines.push(`Position;First Name;Last Name;Division;Category;Power Factor;A;C;D;M;NS;P;Time;Match Percent;${hasHf ? 'HF;' : ''}Match Points`);
           for (const r of s.overallResults as any[]) {
-            lines.push(`${r.position};${r.first_name};${r.last_name};${divisionLabel(r.division || '')};${categoryLabel(r.category || '')};${r.power_factor || ''};${r.alpha};${r.charlie};${r.delta};${r.miss};${r.no_shoot};${r.procedurals};${r.time != null ? Number(r.time).toFixed(2) : ''};${Number(r.match_percent).toFixed(2)}%;${Number(r.match_points).toFixed(2)}`);
+            lines.push(`${r.position};${r.first_name};${r.last_name};${divisionLabel(r.division || '')};${categoryLabel(r.category || '')};${r.power_factor || ''};${r.alpha};${r.charlie};${r.delta};${r.miss};${r.no_shoot};${r.procedurals};${r.time != null ? Number(r.time).toFixed(2) : ''};${Number(r.match_percent).toFixed(2)}%${hasHf ? `;${formatHitFactor(r.hit_factor)}` : ''};${Number(r.match_points).toFixed(2)}`);
           }
           lines.push('');
           if (s.dqOverall.length) {
@@ -162,13 +137,14 @@ const useExportButtons = (activeTab: ResultTab) => {
           break;
         }
         case 'byCategory': {
+          const hasHf = Object.values(s.categoryResults).some((divisions) => Object.values(divisions as Record<string, any[]>).some(hasHitFactor));
           for (const [cat, divisions] of Object.entries(s.categoryResults).sort(([a], [b]) => a.localeCompare(b))) {
             lines.push(`--- ${categoryLabel(cat)} ---`);
             for (const [division, results] of Object.entries(divisions as Record<string, any[]>).sort(([a], [b]) => a.localeCompare(b))) {
               lines.push(divisionLabel(division));
-              lines.push('Position;First Name;Last Name;Time;A;C;D;M;NS;P;Match Percent;Match Points');
+              lines.push(`Position;First Name;Last Name;Time;A;C;D;M;NS;P;Match Percent;${hasHf ? 'HF;' : ''}Match Points`);
               for (const r of results) {
-                lines.push(`${r.position};${r.first_name};${r.last_name};${r.time != null ? Number(r.time).toFixed(2) : ''};${r.alpha};${r.charlie};${r.delta};${r.miss};${r.no_shoot};${r.procedurals};${Number(r.match_percent).toFixed(2)}%;${Number(r.match_points).toFixed(2)}`);
+                lines.push(`${r.position};${r.first_name};${r.last_name};${r.time != null ? Number(r.time).toFixed(2) : ''};${r.alpha};${r.charlie};${r.delta};${r.miss};${r.no_shoot};${r.procedurals};${Number(r.match_percent).toFixed(2)}%${hasHf ? `;${formatHitFactor(r.hit_factor)}` : ''};${Number(r.match_points).toFixed(2)}`);
               }
               lines.push('');
             }
@@ -183,13 +159,14 @@ const useExportButtons = (activeTab: ResultTab) => {
           break;
         }
         case 'byTag': {
+          const hasHf = Object.values(s.tagResults).some((divisions) => Object.values(divisions as Record<string, any[]>).some(hasHitFactor));
           for (const [tag, divisions] of Object.entries(s.tagResults).sort(([a], [b]) => a.localeCompare(b))) {
             lines.push(`--- Tag: ${tag} ---`);
             for (const [division, results] of Object.entries(divisions as Record<string, any[]>).sort(([a], [b]) => a.localeCompare(b))) {
               lines.push(divisionLabel(division));
-              lines.push('Position;First Name;Last Name;Time;A;C;D;M;NS;P;Match Percent;Match Points');
+              lines.push(`Position;First Name;Last Name;Time;A;C;D;M;NS;P;Match Percent;${hasHf ? 'HF;' : ''}Match Points`);
               for (const r of results) {
-                lines.push(`${r.position};${r.first_name};${r.last_name};${r.time != null ? Number(r.time).toFixed(2) : ''};${r.alpha};${r.charlie};${r.delta};${r.miss};${r.no_shoot};${r.procedurals};${Number(r.match_percent).toFixed(2)}%;${Number(r.match_points).toFixed(2)}`);
+                lines.push(`${r.position};${r.first_name};${r.last_name};${r.time != null ? Number(r.time).toFixed(2) : ''};${r.alpha};${r.charlie};${r.delta};${r.miss};${r.no_shoot};${r.procedurals};${Number(r.match_percent).toFixed(2)}%${hasHf ? `;${formatHitFactor(r.hit_factor)}` : ''};${Number(r.match_points).toFixed(2)}`);
               }
               lines.push('');
             }
@@ -246,11 +223,12 @@ tr:nth-child(even){background:#f9f9f9}
 
       switch (activeTab) {
         case 'byDivision': {
+          const hasHf = Object.values(s.divisionResults).some(hasHitFactor);
           for (const [division, results] of Object.entries(s.divisionResults).sort(([a], [b]) => a.localeCompare(b))) {
             parts.push(`<div class="section"><h2>${divisionLabel(division)}</h2>
-<table><tr><th>Pos</th><th>Name</th><th>A</th><th>C</th><th>D</th><th>M</th><th>NS</th><th>P</th><th>Time</th><th>%</th><th>Points</th></tr>`);
+<table><tr><th>Pos</th><th>Name</th><th>A</th><th>C</th><th>D</th><th>M</th><th>NS</th><th>P</th><th>Time</th><th>%</th>${hasHf ? '<th>HF</th>' : ''}<th>Points</th></tr>`);
             for (const r of results as any[]) {
-              parts.push(`<tr><td>${r.position}</td><td>${r.first_name} ${r.last_name}</td><td>${r.alpha}</td><td>${r.charlie}</td><td>${r.delta}</td><td>${r.miss}</td><td>${r.no_shoot}</td><td>${r.procedurals}</td><td>${r.time != null ? Number(r.time).toFixed(2) : '—'}</td><td>${Number(r.match_percent).toFixed(2)}%</td><td>${Number(r.match_points).toFixed(2)}</td></tr>`);
+              parts.push(`<tr><td>${r.position}</td><td>${r.first_name} ${r.last_name}</td><td>${r.alpha}</td><td>${r.charlie}</td><td>${r.delta}</td><td>${r.miss}</td><td>${r.no_shoot}</td><td>${r.procedurals}</td><td>${r.time != null ? Number(r.time).toFixed(2) : '—'}</td><td>${Number(r.match_percent).toFixed(2)}%</td>${hasHf ? `<td>${formatHitFactor(r.hit_factor, '—')}</td>` : ''}<td>${Number(r.match_points).toFixed(2)}</td></tr>`);
             }
             parts.push('</table></div>');
           }
@@ -265,10 +243,11 @@ tr:nth-child(even){background:#f9f9f9}
           break;
         }
         case 'overall': {
+          const hasHf = hasHitFactor(s.overallResults);
           parts.push(`<div class="section"><h2>Overall</h2>
-<table><tr><th>Pos</th><th>Name</th><th>Division</th><th>A</th><th>C</th><th>D</th><th>M</th><th>NS</th><th>P</th><th>Time</th><th>%</th><th>Points</th></tr>`);
+<table><tr><th>Pos</th><th>Name</th><th>Division</th><th>A</th><th>C</th><th>D</th><th>M</th><th>NS</th><th>P</th><th>Time</th><th>%</th>${hasHf ? '<th>HF</th>' : ''}<th>Points</th></tr>`);
           for (const r of s.overallResults as any[]) {
-            parts.push(`<tr><td>${r.position}</td><td>${r.first_name} ${r.last_name}</td><td>${divisionLabel(r.division || '')}</td><td>${r.alpha}</td><td>${r.charlie}</td><td>${r.delta}</td><td>${r.miss}</td><td>${r.no_shoot}</td><td>${r.procedurals}</td><td>${r.time != null ? Number(r.time).toFixed(2) : '—'}</td><td>${Number(r.match_percent).toFixed(2)}%</td><td>${Number(r.match_points).toFixed(2)}</td></tr>`);
+            parts.push(`<tr><td>${r.position}</td><td>${r.first_name} ${r.last_name}</td><td>${divisionLabel(r.division || '')}</td><td>${r.alpha}</td><td>${r.charlie}</td><td>${r.delta}</td><td>${r.miss}</td><td>${r.no_shoot}</td><td>${r.procedurals}</td><td>${r.time != null ? Number(r.time).toFixed(2) : '—'}</td><td>${Number(r.match_percent).toFixed(2)}%</td>${hasHf ? `<td>${formatHitFactor(r.hit_factor, '—')}</td>` : ''}<td>${Number(r.match_points).toFixed(2)}</td></tr>`);
           }
           parts.push('</table></div>');
           if (s.dqOverall.length) {
@@ -313,13 +292,14 @@ tr:nth-child(even){background:#f9f9f9}
           break;
         }
         case 'byCategory': {
+          const hasHf = Object.values(s.categoryResults).some((divisions) => Object.values(divisions as Record<string, any[]>).some(hasHitFactor));
           for (const [cat, divisions] of Object.entries(s.categoryResults).sort(([a], [b]) => a.localeCompare(b))) {
             parts.push(`<div class="section"><h2>${categoryLabel(cat)}</h2>`);
             for (const [division, results] of Object.entries(divisions as Record<string, any[]>).sort(([a], [b]) => a.localeCompare(b))) {
               parts.push(`<h3>${divisionLabel(division)}</h3>
-<table><tr><th>Pos</th><th>Name</th><th>Time</th><th>A</th><th>C</th><th>D</th><th>M</th><th>NS</th><th>P</th><th>%</th><th>Points</th></tr>`);
+<table><tr><th>Pos</th><th>Name</th><th>Time</th><th>A</th><th>C</th><th>D</th><th>M</th><th>NS</th><th>P</th><th>%</th>${hasHf ? '<th>HF</th>' : ''}<th>Points</th></tr>`);
               for (const r of results) {
-                parts.push(`<tr><td>${r.position}</td><td>${r.first_name} ${r.last_name}</td><td>${r.time != null ? Number(r.time).toFixed(2) : '—'}</td><td>${r.alpha}</td><td>${r.charlie}</td><td>${r.delta}</td><td>${r.miss}</td><td>${r.no_shoot}</td><td>${r.procedurals}</td><td>${Number(r.match_percent).toFixed(2)}%</td><td>${Number(r.match_points).toFixed(2)}</td></tr>`);
+                parts.push(`<tr><td>${r.position}</td><td>${r.first_name} ${r.last_name}</td><td>${r.time != null ? Number(r.time).toFixed(2) : '—'}</td><td>${r.alpha}</td><td>${r.charlie}</td><td>${r.delta}</td><td>${r.miss}</td><td>${r.no_shoot}</td><td>${r.procedurals}</td><td>${Number(r.match_percent).toFixed(2)}%</td>${hasHf ? `<td>${formatHitFactor(r.hit_factor, '—')}</td>` : ''}<td>${Number(r.match_points).toFixed(2)}</td></tr>`);
               }
               parts.push('</table>');
             }
@@ -336,13 +316,14 @@ tr:nth-child(even){background:#f9f9f9}
           break;
         }
         case 'byTag': {
+          const hasHf = Object.values(s.tagResults).some((divisions) => Object.values(divisions as Record<string, any[]>).some(hasHitFactor));
           for (const [tag, divisions] of Object.entries(s.tagResults).sort(([a], [b]) => a.localeCompare(b))) {
             parts.push(`<div class="section"><h2>Tag: ${tag}</h2>`);
             for (const [division, results] of Object.entries(divisions as Record<string, any[]>).sort(([a], [b]) => a.localeCompare(b))) {
               parts.push(`<h3>${divisionLabel(division)}</h3>
-<table><tr><th>Pos</th><th>Name</th><th>Time</th><th>A</th><th>C</th><th>D</th><th>M</th><th>NS</th><th>P</th><th>%</th><th>Points</th></tr>`);
+<table><tr><th>Pos</th><th>Name</th><th>Time</th><th>A</th><th>C</th><th>D</th><th>M</th><th>NS</th><th>P</th><th>%</th>${hasHf ? '<th>HF</th>' : ''}<th>Points</th></tr>`);
               for (const r of results) {
-                parts.push(`<tr><td>${r.position}</td><td>${r.first_name} ${r.last_name}</td><td>${r.time != null ? Number(r.time).toFixed(2) : '—'}</td><td>${r.alpha}</td><td>${r.charlie}</td><td>${r.delta}</td><td>${r.miss}</td><td>${r.no_shoot}</td><td>${r.procedurals}</td><td>${Number(r.match_percent).toFixed(2)}%</td><td>${Number(r.match_points).toFixed(2)}</td></tr>`);
+                parts.push(`<tr><td>${r.position}</td><td>${r.first_name} ${r.last_name}</td><td>${r.time != null ? Number(r.time).toFixed(2) : '—'}</td><td>${r.alpha}</td><td>${r.charlie}</td><td>${r.delta}</td><td>${r.miss}</td><td>${r.no_shoot}</td><td>${r.procedurals}</td><td>${Number(r.match_percent).toFixed(2)}%</td>${hasHf ? `<td>${formatHitFactor(r.hit_factor, '—')}</td>` : ''}<td>${Number(r.match_points).toFixed(2)}</td></tr>`);
               }
               parts.push('</table>');
             }
@@ -439,20 +420,9 @@ export default useExportButtons;
 
 // ── PDF drawing helpers (black & white only) ──────────────────────────
 
-const MARGIN = 10;
-const TITLE_SIZE = 14;
-const SUBTITLE_SIZE = 11;
-const TABLE_FONT = 9;
-
-const TABLE_STYLE = {
-  theme: 'plain' as const,
-  styles: { font: 'OpenSans', fontStyle: 'normal', fontSize: TABLE_FONT, textColor: 0 },
-  headStyles: { font: 'OpenSans', fontStyle: 'bold', fontSize: TABLE_FONT, fillColor: [0, 0, 0], textColor: [255, 255, 255] },
-  alternateRowStyles: { fillColor: [245, 245, 245] },
-};
-
 function drawDivisionPDF(doc: any, autoTable: any, drawHeader: any, divisionResults: Record<string, any[]>, dqShooters: any[], t: any) {
   const divisions = Object.entries(divisionResults).sort(([a], [b]) => a.localeCompare(b));
+  const hasHf = Object.values(divisionResults).some(hasHitFactor);
   for (let i = 0; i < divisions.length; i++) {
     const [division, results] = divisions[i];
     if (i > 0) { doc.addPage(); drawHeader(); }
@@ -462,8 +432,8 @@ function drawDivisionPDF(doc: any, autoTable: any, drawHeader: any, divisionResu
       ...TABLE_STYLE,
       startY: 36,
       margin: { left: MARGIN, right: MARGIN },
-      head: [[t('results.position'), t('results.shooter'), 'A', 'C', 'D', 'M', 'NS', 'P', t('results.time'), t('results.matchPercent'), t('results.points')]],
-      body: results.map((r: any) => [r.position, `${r.first_name} ${r.last_name}`, r.alpha, r.charlie, r.delta, r.miss, r.no_shoot, r.procedurals, r.time?.toFixed(2), `${r.match_percent?.toFixed(2)}%`, r.match_points?.toFixed(2)]),
+      head: [[t('results.position'), t('results.shooter'), 'A', 'C', 'D', 'M', 'NS', 'P', t('results.time'), t('results.matchPercent'), ...(hasHf ? ['HF'] : []), t('results.points')]],
+      body: results.map((r: any) => [r.position, `${r.first_name} ${r.last_name}`, r.alpha, r.charlie, r.delta, r.miss, r.no_shoot, r.procedurals, r.time?.toFixed(2), `${r.match_percent?.toFixed(2)}%`, ...(hasHf ? [formatHitFactor(r.hit_factor, '—')] : []), r.match_points?.toFixed(2)]),
       didDrawPage: (data: any) => { drawHeader(data); },
     });
   }
@@ -484,14 +454,15 @@ function drawDivisionPDF(doc: any, autoTable: any, drawHeader: any, divisionResu
 
 function drawOverallPDF(doc: any, autoTable: any, drawHeader: any, results: any[], dqShooters: any[], t: any) {
   if (!results.length) return;
+  const hasHf = hasHitFactor(results);
   setBoldFont(doc); doc.setFontSize(TITLE_SIZE); doc.text(t('results.overall'), MARGIN, 32);
   setRegularFont(doc);
   autoTable(doc, {
     ...TABLE_STYLE,
     startY: 36,
     margin: { left: MARGIN, right: MARGIN },
-    head: [[t('results.position'), t('results.shooter'), t('results.division'), 'A', 'C', 'D', 'M', 'NS', 'P', t('results.time'), t('results.matchPercent'), t('results.points')]],
-    body: results.map((r: any) => [r.position, `${r.first_name} ${r.last_name}`, divisionLabel(r.division || ''), r.alpha, r.charlie, r.delta, r.miss, r.no_shoot, r.procedurals, r.time?.toFixed(2), `${r.match_percent?.toFixed(2)}%`, r.match_points?.toFixed(2)]),
+    head: [[t('results.position'), t('results.shooter'), t('results.division'), 'A', 'C', 'D', 'M', 'NS', 'P', t('results.time'), t('results.matchPercent'), ...(hasHf ? ['HF'] : []), t('results.points')]],
+    body: results.map((r: any) => [r.position, `${r.first_name} ${r.last_name}`, divisionLabel(r.division || ''), r.alpha, r.charlie, r.delta, r.miss, r.no_shoot, r.procedurals, r.time?.toFixed(2), `${r.match_percent?.toFixed(2)}%`, ...(hasHf ? [formatHitFactor(r.hit_factor, '—')] : []), r.match_points?.toFixed(2)]),
     didDrawPage: (data: any) => { drawHeader(data); },
   });
   if (dqShooters?.length) {
@@ -567,6 +538,7 @@ function drawStagePDF(doc: any, autoTable: any, drawHeader: any, stageResults: a
 
 function drawCategoryPDF(doc: any, autoTable: any, drawHeader: any, categoryResults: Record<string, Record<string, any[]>>, dqCategories: any[], t: any) {
   const catEntries = Object.entries(categoryResults).sort(([a], [b]) => a.localeCompare(b));
+  const hasHf = Object.values(categoryResults).some((divisions) => Object.values(divisions).some(hasHitFactor));
   for (const [cat, divisions] of catEntries) {
     doc.addPage(); drawHeader();
     setBoldFont(doc); doc.setFontSize(TITLE_SIZE); doc.text(categoryLabel(cat), MARGIN, 32);
@@ -580,8 +552,8 @@ function drawCategoryPDF(doc: any, autoTable: any, drawHeader: any, categoryResu
         ...TABLE_STYLE,
         startY: currentY,
         margin: { left: MARGIN, right: MARGIN },
-        head: [[t('results.position'), t('results.shooter'), t('results.time'), 'A', 'C', 'D', 'M', 'NS', 'P', t('results.matchPercent'), t('results.points')]],
-        body: (results as any[]).map((r: any) => [r.position, `${r.first_name} ${r.last_name}`, r.time?.toFixed(2), r.alpha, r.charlie, r.delta, r.miss, r.no_shoot, r.procedurals, `${r.match_percent?.toFixed(2)}%`, r.match_points?.toFixed(2)]),
+        head: [[t('results.position'), t('results.shooter'), t('results.time'), 'A', 'C', 'D', 'M', 'NS', 'P', t('results.matchPercent'), ...(hasHf ? ['HF'] : []), t('results.points')]],
+        body: (results as any[]).map((r: any) => [r.position, `${r.first_name} ${r.last_name}`, r.time?.toFixed(2), r.alpha, r.charlie, r.delta, r.miss, r.no_shoot, r.procedurals, `${r.match_percent?.toFixed(2)}%`, ...(hasHf ? [formatHitFactor(r.hit_factor, '—')] : []), r.match_points?.toFixed(2)]),
         didDrawPage: (data: any) => { drawHeader(data); },
       });
       currentY = (doc as any).lastAutoTable.finalY + 6;
@@ -605,6 +577,7 @@ function drawCategoryPDF(doc: any, autoTable: any, drawHeader: any, categoryResu
 
 function drawTagPDF(doc: any, autoTable: any, drawHeader: any, tagResults: Record<string, Record<string, any[]>>, dqTags: any[], t: any) {
   const tagEntries = Object.entries(tagResults).sort(([a], [b]) => a.localeCompare(b));
+  const hasHf = Object.values(tagResults).some((divisions) => Object.values(divisions).some(hasHitFactor));
   for (const [tag, divisions] of tagEntries) {
     doc.addPage(); drawHeader();
     setBoldFont(doc); doc.setFontSize(TITLE_SIZE); doc.text(t('results.tag', { tag }), MARGIN, 32);
@@ -618,8 +591,8 @@ function drawTagPDF(doc: any, autoTable: any, drawHeader: any, tagResults: Recor
         ...TABLE_STYLE,
         startY: currentY,
         margin: { left: MARGIN, right: MARGIN },
-        head: [[t('results.position'), t('results.shooter'), t('results.time'), 'A', 'C', 'D', 'M', 'NS', 'P', t('results.matchPercent'), t('results.points')]],
-        body: (results as any[]).map((r: any) => [r.position, `${r.first_name} ${r.last_name}`, r.time?.toFixed(2), r.alpha, r.charlie, r.delta, r.miss, r.no_shoot, r.procedurals, `${r.match_percent?.toFixed(2)}%`, r.match_points?.toFixed(2)]),
+        head: [[t('results.position'), t('results.shooter'), t('results.time'), 'A', 'C', 'D', 'M', 'NS', 'P', t('results.matchPercent'), ...(hasHf ? ['HF'] : []), t('results.points')]],
+        body: (results as any[]).map((r: any) => [r.position, `${r.first_name} ${r.last_name}`, r.time?.toFixed(2), r.alpha, r.charlie, r.delta, r.miss, r.no_shoot, r.procedurals, `${r.match_percent?.toFixed(2)}%`, ...(hasHf ? [formatHitFactor(r.hit_factor, '—')] : []), r.match_points?.toFixed(2)]),
         didDrawPage: (data: any) => { drawHeader(data); },
       });
       currentY = (doc as any).lastAutoTable.finalY + 6;

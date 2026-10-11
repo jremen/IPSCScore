@@ -26,7 +26,12 @@ export default function StagePickerModal({ show, onClose }: StagePickerModalProp
 
   const stageScored = (stageId: string) => {
     if (!scoringProgress || registrations.length === 0) return false;
-    return scoringProgress.scored.filter((e: { stage_id: string }) => e.stage_id === stageId).length === registrations.length;
+    const scoredIds = new Set(
+      scoringProgress.scored
+        .filter((e: { stage_id: string }) => e.stage_id === stageId)
+        .map((e: { registration_id: string }) => e.registration_id)
+    );
+    return registrations.every((r) => r.is_dq || scoredIds.has(r.id));
   };
 
   return (

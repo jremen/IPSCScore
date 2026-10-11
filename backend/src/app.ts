@@ -26,12 +26,14 @@ import { backupRoutes } from './routes/backup.js';
 import { localBackupRoutes } from './routes/localBackup.js';
 import { matchExportRoutes } from './routes/matchExport.js';
 import { auditLogRoutes } from './routes/audit.js';
+import { cupRoutes } from './routes/cups.js';
 import { env } from './env.js';
 import { eventBroadcaster } from './services/events.js';
 
 const app = new Hono<{
   Variables: {
     domainMode: string;
+    authRole?: string;
   };
 }>();
 
@@ -146,8 +148,45 @@ app.use('/api/shooters', authMiddleware);
 app.use('/api/shooters', requireAdmin);
 app.route('/api/shooters', shooterRoutes);
 
-// ─── Registrations: all reads + writes require auth ───
-app.use('/api/matches/:matchId/registrations', authMiddleware);
+// ─── Registrations ───
+// NOTE: in Hono v4 an `app.use('/x/*')` pattern also matches the base path
+// `/x`, so a single wildcard middleware covers the list route too.
+// Access rules:
+//   - Anonymous GET on the list endpoint is public — the anonymous /squads
+//     view loads its roster this way. The list handler resolves the caller
+//     role itself and scrubs PII (email, region, winmss_member_id) when no
+//     session is presented. Requests carrying a token go through authMiddleware
+//     so admin/scorer reads keep full fields and stale tokens get 401.
+//   - DQ/undq may be performed by any authenticated session (admin or scorer),
+//     since the scoring UI exposes those actions to stage officers.
+//   - Every other route (create, bulk, single edit/remove, group ops,
+//     create-and-add, CSV export) is admin only.
+app.use('/api/matches/:matchId/registrations/*', async (c, next) => {
+  const method = c.req.method;
+  const path = c.req.path;
+  const isBase = /\/registrations$/.test(path);
+
+  if (method === 'GET' && isBase) {
+    if (!c.req.header('Authorization')) {
+      c.set('authRole', 'anonymous');
+      return next();
+    }
+    return authMiddleware(c, next);
+  }
+
+  if (method === 'PUT' && (path.endsWith('/dq') || path.endsWith('/undq'))) {
+    return authMiddleware(c, next);
+  }
+
+  // Admin-only branch: run auth first (its 401 response, if any, is returned
+  // as-is), then require the admin role before letting the handler run.
+  const authRes = await authMiddleware(c, async () => {});
+  if (authRes) return authRes;
+  if (c.get('authRole') !== 'admin') {
+    return c.json({ error: 'Admin access required.' }, 401);
+  }
+  return next();
+});
 app.route('/api', registrationRoutes);
 
 // ─── Scoring: scorer or admin auth ───
@@ -184,6 +223,11 @@ app.route('/api/import', winmssImportRoutes);
 app.use('/api/audit', authMiddleware);
 app.use('/api/audit', requireAdmin);
 app.route('/api', auditLogRoutes);
+
+// ─── Cups (league/season aggregates): admin only ───
+app.use('/api/cups', authMiddleware);
+app.use('/api/cups', requireAdmin);
+app.route('/api/cups', cupRoutes);
 
 // ─── Match Export/Import: admin only ───
 app.use('/api/matches/import', authMiddleware);

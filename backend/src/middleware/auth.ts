@@ -9,8 +9,11 @@ import { sql } from '../db/client.js';
  *   - Scorer role: requires a valid scorer session token (trust token auth)
  *   - No per-stage restrictions — scorer can edit any stage.
  *
- * Public endpoints (results, squads, health, etc.) are handled by
- * PUBLIC_GET_PATHS in app.ts which bypass this middleware entirely.
+ * Public endpoints (results, squads, health, current match, etc.) are
+ * registered in app.ts before this middleware, or they bypass it via a
+ * method guard (e.g. anonymous GET on registrations), so unauthenticated
+ * clients can read them — PII is scrubbed by the handlers when the role
+ * resolves to anonymous.
  */
 export async function authMiddleware(c: Context, next: Next) {
   const authHeader = c.req.header('Authorization');
