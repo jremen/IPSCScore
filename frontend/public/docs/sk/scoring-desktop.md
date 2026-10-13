@@ -8,7 +8,7 @@ Keď sa prihlásite ako administrátor v prehliadači na počítači, alebo pou�
 
 - **Horná lišta** — šípka späť, aktuálna situácia, aktuálny strelec, šípky Ďalej/Späť.
 - **Ľavý stĺpec** — papierové terče v 2-stĺpcovej mriežke. Každý terč má tlačidlá Alpha/Charlie/Delta/Miss. Agregované zónové vstupy navrchu umožňujú zadať počet zásahov pre celú situáciu naraz.
-- **Pravý bočný panel** — oceľové terče (Hit/Miss pre každý tanier), NPM terče, no-shoot zásahy a procedurálne (PE, FTSA atď.).
+- **Pravý bočný panel** — oceľové terče (Hit/Miss pre každý tanier), NPM terče, zásahy do penalizačných terčov a procedurálne (PE, FTSA atď.).
 - **Spodok** — vstup času, par time (iba Fixed Time) a tlačidlo **DQ**.
 - **Živý náhľad** — malý chip v pravom dolnom rohu zobrazuje aktuálne raw / penalty / net / HF pre aktívneho strelca.
 

@@ -68,7 +68,7 @@ function isBoldColumn(col: ColumnKey): boolean {
   return col === 'matchPoints' || col === 'stagePoints';
 }
 
-function cellClassName(col: ColumnKey): string {
+export function cellClassName(col: ColumnKey): string {
   const base = col !== 'shooter' && col !== 'division' ? 'font-mono' : '';
   const bold = isBoldColumn(col) ? 'font-bold' : '';
   const shooter = col === 'shooter' ? 'font-medium dark:text-white whitespace-nowrap' : '';

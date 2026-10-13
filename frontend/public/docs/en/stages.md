@@ -12,7 +12,7 @@ Open the **Stages** tab for the current match and click **+ Add Stage**.
 
 - **Name** — Used everywhere the stage is listed.
 - **Scoring type** — See [Types of scoring](#types-of-scoring) below.
-- **Targets** — Number of paper, steel, no-shoot, and NPM targets.
+- **Targets** — Number of paper, steel, penalty target, and NPM targets.
 - **Hits per paper** — How many hits register on each paper target.
 - **Par time** — For `Fixed Time` only.
 - **Config** — Per-type fields (number of strings, course type, fire type, etc.).
@@ -65,7 +65,7 @@ See the [Scoring on desktop](app-tab:scoring) and [Scoring on mobile](app-tab:sc
 
 - Single time.
 - Per-target neutralized toggle.
-- Penalty seconds (FTN, miss, no-shoot, procedural) added to the time.
+- Penalty seconds (FTN, miss, penalty target, procedural) added to the time.
 
 ### Bullseye / ISSF / Archery
 

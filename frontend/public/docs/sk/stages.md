@@ -12,7 +12,7 @@ Otvorte záložku **Situácie** pre aktuálnu súťaž a kliknite na **+ Pridať
 
 - **Názov** — Používa sa všade, kde sa situácia zobrazuje.
 - **Typ bodovania** — Pozri [Typy bodovania](#typy-bodovania) nižšie.
-- **Terče** — Počet papierových, oceľových, no-shoot a NPM terčov.
+- **Terče** — Počet papierových, oceľových, penalizačných a NPM terčov.
 - **Zásahy na papier** — Koľko zásahov sa registruje na každý papierový terč.
 - **Par time** — Iba pre `Fixed Time`.
 - **Konfigurácia** — Polia špecifické pre daný typ (počet kôl, typ kurzu, typ streľby atď.).
@@ -65,7 +65,7 @@ Pozrite si stránky [Bodovanie na počítači](app-tab:scoring) a [Bodovanie v m
 
 - Jeden čas.
 - Prepínač neutralizácie pre každý terč.
-- Penalizačné sekundy (FTN, miss, no-shoot, procedurálne) sa pripočítavajú k času.
+- Penalizačné sekundy (FTN, miss, penalizačný terč, procedurálne) sa pripočítavajú k času.
 
 ### Bullseye / ISSF / Lukostreľba
 

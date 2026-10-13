@@ -8,7 +8,7 @@ When you sign in as an admin on a desktop browser, or use the desktop app, the s
 
 - **Top bar** — back arrow, current stage, current shooter, Next/Prev arrows.
 - **Left column** — paper targets in a 2-column grid. Each target has Alpha/Charlie/Delta/Miss buttons. Aggregated zone inputs at the top let you enter a hit count for the whole stage at once.
-- **Right sidebar** — steel targets (Hit/Miss per plate), NPM targets, no-shoot hits, and procedurals (PE, FTSA, etc.).
+- **Right sidebar** — steel targets (Hit/Miss per plate), NPM targets, penalty target hits, and procedurals (PE, FTSA, etc.).
 - **Bottom** — time input, par time (Fixed Time only), and the **DQ** button.
 - **Live preview** — the small chip in the bottom-right shows the current raw / penalty / net / HF for the active shooter.
 

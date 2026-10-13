@@ -33,6 +33,19 @@ export interface CreateCupInput {
   matchIds?: string[];
 }
 
+export type CupMatchStatus = 'counted' | 'excluded' | 'none';
+
+export interface CupMatchResult {
+  match_id: string;
+  status: CupMatchStatus;
+  /** Hit Factor mode: net points of the match (counted or excluded). */
+  net_points?: number | null;
+  /** Hit Factor mode: time of hit-factor stages in the match. */
+  time?: number | null;
+  /** Points mode: match points (counted or excluded). */
+  points?: number | null;
+}
+
 export interface CupResultRow {
   position: number;
   shooter_id: string;
@@ -41,18 +54,14 @@ export interface CupResultRow {
   tag: string | null;
   division: string;
   category: string;
-  matches_count: number;
-  matches_required: number;
+  /** Hit Factor mode: total net points over counted matches; null in points mode. */
+  net_points: number | null;
+  /** Hit Factor mode: total hit-factor time over counted matches; null in points mode. */
   time: number | null;
-  alpha: number;
-  charlie: number;
-  delta: number;
-  miss: number;
-  no_shoot: number;
-  procedurals: number;
   match_percent: number;
   match_points: number | null;
   hit_factor: number | null;
+  matches: CupMatchResult[];
 }
 
 export interface CupResultsPayload {

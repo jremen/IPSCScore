@@ -29,7 +29,7 @@ IPSCScore covers the full lifecycle of an IPSC/USPSA shooting match:
 
 1. **Match Management** — Create matches, define stages (with scoring type, target layout, max points), upload stage diagrams.
 2. **Shooter Registration** — Maintain a persistent shooter database, register shooters into matches with per-match division/category/power factor overrides.
-3. **Live Scoring** — Range officers enter scores per-shooter per-stage: time, per-target hits (A/C/D/M/NS), penalties, steel hits. Mobile-first UI with 44px+ touch targets and sticky save bar.
+3. **Live Scoring** — Range officers enter scores per-shooter per-stage: time, per-target hits (A/C/D/M/PT), penalties, steel hits. Mobile-first UI with 44px+ touch targets and sticky save bar.
 4. **Results & Rankings** — Automatic hit factor calculation, per-division ranking, stage percent/points, overall match results. Public results view auto-refreshes every 30 seconds.
 5. **Data Export** — PDF score sheets, CSV import/export for shooters/registrations/scores, full database backup/restore.
 6. **Legacy Import** — Import shooter data and scores from WinMSS `.mdb` database files.

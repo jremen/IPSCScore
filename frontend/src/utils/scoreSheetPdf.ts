@@ -339,7 +339,7 @@ function drawZonePerTargetTable(doc: any, stage: Stage, y: number, col: Col): nu
   const isIdpa = stage.scoring_type === 'idpa';
   const labels = isIdpa
     ? (config as any).zoneLabels
-    : { alpha: 'A', charlie: 'C', delta: 'D', miss: 'M', no_shoot: 'NS' };
+    : { alpha: 'A', charlie: 'C', delta: 'D', miss: 'M', no_shoot: 'PT' };
 
   const hasNoShoot = stage.no_shoot_targets > 0;
   const hasSteel = stage.steel_targets > 0;
@@ -355,16 +355,16 @@ function drawZonePerTargetTable(doc: any, stage: Stage, y: number, col: Col): nu
     if (hasSteel || hasNpm) {
       // Build steel/NPM content — separate rows for steel and NPM for better writability
       if (hasSteel) {
-        // Build a row with dedicated columns for Hit, Miss, and optionally NS
+        // Build a row with dedicated columns for Hit, Miss, and optionally PT
         if (hasNoShoot) {
-          // 6 columns: Tgt=Steel, A=Hit, C=Miss, D=_, M=_, NS=NS
+          // 6 columns: Tgt=Steel, A=Hit, C=Miss, D=_, M=_, PT=PT
           paperBody.push([
             { content: `${i18next.t('stages.steel')} (${stage.steel_targets})`, styles: { fontStyle: 'bold', fontSize: 9, fillColor: [245, 245, 245], minCellHeight: STEEL_ROW_H } },
             { content: i18next.t('scoring.hits'), styles: { fontStyle: 'bold', fontSize: 9, fillColor: [245, 245, 245], minCellHeight: STEEL_ROW_H } },
             { content: '', styles: { fillColor: [245, 245, 245], minCellHeight: STEEL_ROW_H } },
             { content: '', styles: { fillColor: [245, 245, 245], minCellHeight: STEEL_ROW_H } },
             { content: 'Miss', styles: { fontStyle: 'bold', fontSize: 9, fillColor: [245, 245, 245], minCellHeight: STEEL_ROW_H } },
-            { content: 'NS', styles: { fontStyle: 'bold', fontSize: 9, fillColor: [245, 245, 245], minCellHeight: STEEL_ROW_H } },
+            { content: 'PT', styles: { fontStyle: 'bold', fontSize: 9, fillColor: [245, 245, 245], minCellHeight: STEEL_ROW_H } },
           ]);
         } else {
           // 5 columns: Tgt=Steel, A=Hit, C=Miss, D=_, M=_
@@ -490,7 +490,7 @@ function drawMultiGunTable(doc: any, stage: Stage, y: number, col: Col): number 
   const hasNoShoot = stage.config?.has_no_shoot || stage.no_shoot_targets > 0;
 
   const headCols = ['Tgt', 'Neutralized'];
-  if (hasNoShoot) headCols.push('NS');
+  if (hasNoShoot) headCols.push('PT');
   const head = [headCols];
   const body: any[][] = [];
   for (let i = 1; i <= numTargets; i++) {
@@ -500,7 +500,7 @@ function drawMultiGunTable(doc: any, stage: Stage, y: number, col: Col): number 
   }
 
   // Penalties row
-  const penaltyLabels = ['FTN', 'Miss', 'NS', 'Proc (s)'];
+  const penaltyLabels = ['FTN', 'Miss', 'PT', 'Proc (s)'];
   const penaltyText = `${i18next.t('scoring.penalties')}:  ` + penaltyLabels.map(l => `${l} ____`).join('    ');
   const penaltyColSpan = hasNoShoot ? 3 : 2;
   body.push([{ content: penaltyText, colSpan: penaltyColSpan, styles: { fontStyle: 'bold', fontSize: 8, minCellHeight: PENALTY_ROW_H, fillColor: [248, 248, 248], valign: 'bottom' } }]);
@@ -623,7 +623,7 @@ function getPenaltyLabels(scoringType: string): string[] {
     case 'virginia':
       return ['Proc', 'FTSA', 'Ex Shot', 'Ex Hit', 'Stack'];
     case 'fixed_time':
-      return ['NS', 'Proc', 'Ex Shot', 'Ex Hit', 'Stack', 'Overtime'];
+      return ['PT', 'Proc', 'Ex Shot', 'Ex Hit', 'Stack', 'Overtime'];
     case 'idpa':
       return ['PE', 'HNT', 'FTN', 'FP', 'FTDR'];
     default:

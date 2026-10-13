@@ -230,14 +230,14 @@ export function getScoringCategoryConfig(type: string) {
   if (category === 'zone_per_target' && type === 'idpa') {
     return {
       category: 'zone_per_target' as const,
-      zoneLabels: { alpha: '-0', charlie: '-1', delta: '-3', miss: 'M', no_shoot: 'NS' },
+      zoneLabels: { alpha: '-0', charlie: '-1', delta: '-3', miss: 'M', no_shoot: 'PT' },
       hasTime: true,
       hasHitFactor: false,
       rankingMethod: 'lowest_time' as const,
       showPowerFactor: false,
       penaltyDefs: [
         { key: 'penalty_pe', label: 'PE (Procedural)', seconds: 3 },
-        { key: 'penalty_hnt', label: 'HNT (Hit No-Shoot)', seconds: 5 },
+        { key: 'penalty_hnt', label: 'HNT (Hit PT)', seconds: 5 },
         { key: 'penalty_ftn', label: 'FTN (Fail to Neutralize)', seconds: 5 },
         { key: 'penalty_fp', label: 'FP (Flagrant Penalty)', seconds: 10 },
         { key: 'penalty_ftdr', label: 'FTDR (Fail to Do Right)', seconds: 20 },
@@ -248,7 +248,7 @@ export function getScoringCategoryConfig(type: string) {
   if (category === 'zone_per_target') {
     return {
       category: 'zone_per_target' as const,
-      zoneLabels: { alpha: 'A', charlie: 'C', delta: 'D', miss: 'M', no_shoot: 'NS' },
+      zoneLabels: { alpha: 'A', charlie: 'C', delta: 'D', miss: 'M', no_shoot: 'PT' },
       hasTime: type !== 'fixed_time',
       hasHitFactor: type === 'comstock' || type === 'virginia' || type === 'hit_factor',
       rankingMethod: 'hit_factor' as const,
@@ -278,7 +278,7 @@ export function getScoringCategoryConfig(type: string) {
       penaltyDefs: [
         { key: 'penalty_ftn_sec', label: 'FTN', seconds: 5 },
         { key: 'penalty_miss_sec', label: 'Miss', seconds: 10 },
-        { key: 'penalty_no_shoot_sec', label: 'No-Shoot', seconds: 5 },
+        { key: 'penalty_no_shoot_sec', label: 'Penalty Target', seconds: 5 },
         { key: 'penalty_procedural_sec', label: 'Procedural', seconds: 5 },
       ],
     };
@@ -313,7 +313,7 @@ export function getScoringCategoryConfig(type: string) {
 }
 
 /** IDPA zone labels for display */
-export const IDPA_ZONE_LABELS = { alpha: '-0', charlie: '-1', delta: '-3', miss: 'M', no_shoot: 'NS' } as const;
+export const IDPA_ZONE_LABELS = { alpha: '-0', charlie: '-1', delta: '-3', miss: 'M', no_shoot: 'PT' } as const;
 
 /** IDPA zone point-down values */
 export const IDPA_ZONE_POINTS_DOWN = { alpha: 0, charlie: 1, delta: 3 } as const;

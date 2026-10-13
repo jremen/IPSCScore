@@ -43,7 +43,7 @@ export default function DesktopPaperTargets({
   const totalAll = totalScoring + paperTotals.miss;
 
   const fields: { field: TotalField; label: string; color: string; }[] = hasNoShootTargets
-    ? [...ZONE_CONFIG, { field: 'no_shoot_hits', label: 'NS', color: 'border-red-500 focus:ring-red-400' }]
+    ? [...ZONE_CONFIG, { field: 'no_shoot_hits', label: 'PT', color: 'border-red-500 focus:ring-red-400' }]
     : ZONE_CONFIG;
 
   return (

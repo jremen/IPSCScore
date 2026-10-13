@@ -184,7 +184,7 @@ export default function IDPAScoringSheet({ stage, score }: Props) {
                     <th className="px-1 sm:px-2 py-1 text-xs font-bold text-yellow-600">-1</th>
                     <th className="px-1 sm:px-2 py-1 text-xs font-bold text-orange-600">-3</th>
                     <th className="px-1 sm:px-2 py-1 text-xs font-bold text-red-600">M</th>
-                    <th className={`px-1 sm:px-2 py-1 text-xs font-bold text-red-500 ${stage.no_shoot_targets === 0 ? 'opacity-40' : ''}`}>NS</th>
+                    <th className={`px-1 sm:px-2 py-1 text-xs font-bold text-red-500 ${stage.no_shoot_targets === 0 ? 'opacity-40' : ''}`}>PT</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -8,7 +8,7 @@ Na telefóne sa bodovanie zbalí do jedného stĺpca. Strelec prechádza papiero
 
 - **Horná lišta** — aktívna situácia ako tlačidlo (kliknutím prepnete situácie cez modal), ikona briefingu.
 - **Zoznam strelcov** — kliknutím na meno strelca začnete zadávať. Zoznam je na celú obrazovku.
-- **Hárok** — papierové terče zoradené vertikálne (jeden na riadok), potom oceľové terče v riadku, potom NPM/no-shoot (ak je to relevantné), potom procedurálne, potom čas naspodku.
+- **Hárok** — papierové terče zoradené vertikálne (jeden na riadok), potom oceľové terče v riadku, potom NPM/penalizačné terče (ak je to relevantné), potom procedurálne, potom čas naspodku.
 - **Tlačidlo DQ** — úplne naspodku.
 - **Uložiť** — veľké tlačidlo naspodku, sticky.
 

@@ -78,7 +78,7 @@ export default function PaperTargetsTable({
           <div className="text-lg font-bold dark:text-white py-1 text-center">C</div>
           <div className="text-lg font-bold dark:text-white py-1 text-center">D</div>
           <div className="text-lg font-bold text-red-600 dark:text-white py-1 text-center">M</div>
-          <div className={`text-lg font-bold text-red-500 dark:text-white py-1 text-center ${hasNoShootTargets || hasSteelRow ? '' : 'opacity-40'}`}>NS</div>
+          <div className={`text-lg font-bold text-red-500 dark:text-white py-1 text-center ${hasNoShootTargets || hasSteelRow ? '' : 'opacity-40'}`}>PT</div>
           {hasNpm && <div className="text-lg font-bold text-blue-600 dark:text-blue-400 py-1 text-center">NPM</div>}
         </div>
       </div>

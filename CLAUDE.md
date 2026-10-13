@@ -148,7 +148,7 @@ Some constants in `frontend/src/utils/constants.ts` hold canonical English domai
 - `MATCH_LEVELS` — "Level 1".."Level 5"
 - `DIVISIONS` — sport-specific names (Open, Standard, Production Optics, Carry Optics, Single Stack, etc.) where a Slovak equivalent does not exist or would confuse competitors
 - `SCORING_TYPES` — Comstock, Virginia Count, Fixed Time, Chrono, IDPA, Action Steel, Multi-Gun, Bullseye, NRL22
-- `IDPA_ZONE_LABELS` (A/C/D/M/NS)
+- `IDPA_ZONE_LABELS` (A/C/D/M/PT)
 - `BULLSEYE_RING_VALUES`, `FCLASS_RING_VALUES`, `ARCHERY_RING_VALUES` (zone names and abbreviations)
 - Penalty keys / abbreviations: PE, HNT, FTN, FP, FTDR, FTSA
 

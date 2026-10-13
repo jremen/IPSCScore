@@ -8,7 +8,7 @@ On a phone, the scoring UI collapses to a single column. The shooter works throu
 
 - **Top bar** — the active stage as a button (tap to switch stages via the modal), the stage briefing icon.
 - **Shooter list** — tap any shooter name to start scoring them. The list is full-screen.
-- **Sheet** — paper targets stacked vertically (one per row), then steel targets in a row, then NPM/no-shoot if applicable, then procedurals, then time at the bottom.
+- **Sheet** — paper targets stacked vertically (one per row), then steel targets in a row, then NPM/penalty targets if applicable, then procedurals, then time at the bottom.
 - **DQ button** — at the very bottom.
 - **Save** — large button at the bottom, sticky.
 

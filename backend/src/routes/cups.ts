@@ -8,9 +8,6 @@ const HF_SCORING_TYPES = ['comstock', 'virginia', 'hit_factor'];
 
 const CUP_CATEGORIES = new Set(['regular', 'junior', 'senior', 'super_senior', 'lady']);
 
-/** Number of ranked shooters returned per Cup standings table. */
-const CUP_TOP_POSITIONS = 3;
-
 type ScoringMode = 'hit_factor' | 'points';
 
 function isScoringMode(v: unknown): v is ScoringMode {
@@ -330,13 +327,8 @@ interface MatchAggRow {
   individual?: never;
   matchPoints: number;
   matchHf: number;
-  time: number;
-  alpha: number;
-  charlie: number;
-  delta: number;
-  miss: number;
-  noShoot: number;
-  procedurals: number;
+  netPoints: number;
+  hfTime: number;
 }
 
 function compareStandings(a: any, b: any): number {
@@ -353,21 +345,26 @@ function compareStandings(a: any, b: any): number {
 }
 
 function rankRows(rows: any[], bestScore: number, mode: ScoringMode): any[] {
-  return rows.map((r: any, i: number) => ({
-    ...r,
-    position: i + 1,
-    match_percent: bestScore > 0 ? round2((r.score / bestScore) * 100) : 0,
-    ...(mode === 'hit_factor'
-      ? { hit_factor: round4(r.score), match_points: null }
-      : { match_points: round2(r.score), hit_factor: null }),
-  }));
+  return rows.map((r: any, i: number) => {
+    const pub = { ...r };
+    delete pub.score;
+    delete pub.individual;
+    delete pub.shooterId;
+    return {
+      ...pub,
+      position: i + 1,
+      match_percent: bestScore > 0 ? round2((r.score / bestScore) * 100) : 0,
+      ...(mode === 'hit_factor'
+        ? { hit_factor: round4(r.score), match_points: null }
+        : { match_points: round2(r.score), hit_factor: null }),
+    };
+  });
 }
 
-/** Rank a group's qualified shooters, drop it when below the participant threshold,
- *  and keep only the first {@link CUP_TOP_POSITIONS} positions. Returns null when hidden. */
+/** Rank a group's qualified shooters; drop the group when below the participant threshold. */
 function rankGroup(rows: any[], mode: ScoringMode, minParticipants: number | null): any[] | null {
   if (minParticipants != null && rows.length < minParticipants) return null;
-  return rankRows(rows.slice(), rows[0].score, mode).slice(0, CUP_TOP_POSITIONS);
+  return rankRows(rows.slice(), rows[0].score, mode);
 }
 
 cupRoutes.get('/:id/results', async (c) => {
@@ -406,25 +403,11 @@ cupRoutes.get('/:id/results', async (c) => {
     WITH stage_totals AS (
       SELECT ss.registration_id, ss.match_id,
         SUM(ss.stage_points) as match_points,
-        SUM(ss.procedural_count) as procedurals,
-        SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time,
         SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.net_points ELSE 0 END) as hf_net_points,
         SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.time ELSE 0 END) as hf_time,
         COUNT(ss.id) FILTER (WHERE ss.is_dnf = FALSE) as scored_stages
       FROM stage_scores ss
       JOIN stages st ON st.id = ss.stage_id
-      WHERE ss.match_id = ANY(${matchIds})
-      GROUP BY ss.registration_id, ss.match_id
-    ),
-    target_totals AS (
-      SELECT ss.registration_id, ss.match_id,
-        SUM(ts.alpha) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = TRUE THEN 1 ELSE 0 END), 0) as alpha,
-        SUM(ts.charlie) as charlie,
-        SUM(ts.delta) as delta,
-        SUM(ts.miss) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = FALSE THEN 1 ELSE 0 END), 0) as miss,
-        SUM(ts.no_shoot_hits) as no_shoot
-      FROM stage_scores ss
-      JOIN target_scores ts ON ts.stage_score_id = ss.id
       WHERE ss.match_id = ANY(${matchIds})
       GROUP BY ss.registration_id, ss.match_id
     )
@@ -436,19 +419,13 @@ cupRoutes.get('/:id/results', async (c) => {
       mr.is_dq,
       COALESCE(st.match_points, 0) as match_points,
       CASE WHEN COALESCE(st.hf_time, 0) > 0 THEN ROUND(st.hf_net_points / st.hf_time, 4) ELSE NULL END as match_hf,
-      COALESCE(st.total_time, 0) as time,
-      COALESCE(tt.alpha, 0) as alpha,
-      COALESCE(tt.charlie, 0) as charlie,
-      COALESCE(tt.delta, 0) as delta,
-      COALESCE(tt.miss, 0) as miss,
-      COALESCE(tt.no_shoot, 0) as no_shoot,
-      COALESCE(st.procedurals, 0) as procedurals,
+      COALESCE(st.hf_net_points, 0) as hf_net_points,
+      COALESCE(st.hf_time, 0) as hf_time,
       COALESCE(st.scored_stages, 0) as scored_stages
     FROM match_registrations mr
     JOIN shooters s ON s.id = mr.shooter_id
     JOIN cup_matches cm ON cm.match_id = mr.match_id
     LEFT JOIN stage_totals st ON st.registration_id = mr.id AND st.match_id = mr.match_id
-    LEFT JOIN target_totals tt ON tt.registration_id = mr.id AND tt.match_id = mr.match_id
     WHERE cm.cup_id = ${id}
   `;
 
@@ -465,13 +442,8 @@ cupRoutes.get('/:id/results', async (c) => {
     metric: mode === 'hit_factor' ? (r.match_hf != null ? num(r.match_hf) : 0) : num(r.match_points),
     matchPoints: num(r.match_points),
     matchHf: num(r.match_hf),
-    time: num(r.time),
-    alpha: num(r.alpha),
-    charlie: num(r.charlie),
-    delta: num(r.delta),
-    miss: num(r.miss),
-    noShoot: num(r.no_shoot),
-    procedurals: num(r.procedurals),
+    netPoints: num(r.hf_net_points),
+    hfTime: num(r.hf_time),
   }));
 
   const shooters = new Map<string, { rows: MatchAggRow[] }>();
@@ -504,17 +476,24 @@ cupRoutes.get('/:id/results', async (c) => {
         const counted = validRows.slice(0, required);
         const score = counted.reduce((sum, r) => sum + r.metric, 0);
         const individual = counted.slice().sort((a, b) => b.metric - a.metric).map((r) => r.metric);
+        const countedIds = new Set(counted.map((r) => r.matchId));
+        const rowByMatch = new Map(divRows.map((r) => [r.matchId, r]));
+
+        const matchResults = matches.map((m: any) => {
+          const matchRow = rowByMatch.get(m.id);
+          if (!matchRow || !matchRow.valid) return { match_id: m.id, status: 'none' as const };
+          const status = countedIds.has(m.id) ? ('counted' as const) : ('excluded' as const);
+          return mode === 'hit_factor'
+            ? { match_id: m.id, status, net_points: round2(matchRow.netPoints), time: round2(matchRow.hfTime) }
+            : { match_id: m.id, status, points: round2(matchRow.matchPoints) };
+        });
+
         qualified.push({
           ...base,
-          matches_count: validRows.length,
-          matches_required: required,
-          time: round2(counted.reduce((s, r) => s + r.time, 0)),
-          alpha: counted.reduce((s, r) => s + r.alpha, 0),
-          charlie: counted.reduce((s, r) => s + r.charlie, 0),
-          delta: counted.reduce((s, r) => s + r.delta, 0),
-          miss: counted.reduce((s, r) => s + r.miss, 0),
-          no_shoot: counted.reduce((s, r) => s + r.noShoot, 0),
-          procedurals: counted.reduce((s, r) => s + r.procedurals, 0),
+          shooter_id: shooterId,
+          matches: matchResults,
+          net_points: mode === 'hit_factor' ? round2(counted.reduce((s, r) => s + r.netPoints, 0)) : null,
+          time: mode === 'hit_factor' ? round2(counted.reduce((s, r) => s + r.hfTime, 0)) : null,
           score,
           individual,
         });
@@ -536,7 +515,7 @@ cupRoutes.get('/:id/results', async (c) => {
   }
 
   const overallBest = qualified.length > 0 ? qualified[0].score : 0;
-  const overall = rankRows(qualified.slice(), overallBest, mode).slice(0, CUP_TOP_POSITIONS);
+  const overall = rankRows(qualified.slice(), overallBest, mode);
 
   const byCategory: Record<string, Record<string, any[]>> = {};
   for (const row of qualified) {

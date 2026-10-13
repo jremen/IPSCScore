@@ -72,7 +72,7 @@ export default function DesktopSteelTargets({
         {hasNoShoot && (
           <div className="flex items-center gap-4 mt-2">
             <div className="flex items-center gap-2">
-              <label className="text-xs font-bold text-red-500 dark:text-red-400 uppercase">NS</label>
+              <label className="text-xs font-bold text-red-500 dark:text-red-400 uppercase">PT</label>
               <div className="flex items-center gap-1">
                 <button
                   className="w-8 h-8 rounded-lg flex items-center justify-center font-mono text-lg font-bold bg-gray-100 dark:bg-gray-700 text-red-600 dark:text-red-400 border-2 border-red-300 dark:border-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"

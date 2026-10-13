@@ -25,8 +25,16 @@ interface CupActions {
 function numFields(row: any): any {
   if (!row) return row;
   const out: any = { ...row };
-  for (const key of ['time', 'match_percent', 'match_points', 'hit_factor', 'matches_count', 'matches_required', 'alpha', 'charlie', 'delta', 'miss', 'no_shoot', 'procedurals']) {
+  for (const key of ['time', 'match_percent', 'match_points', 'hit_factor', 'net_points']) {
     if (key in out) out[key] = out[key] == null ? null : Number(out[key]);
+  }
+  if (Array.isArray(out.matches)) {
+    out.matches = out.matches.map((m: any) => ({
+      ...m,
+      net_points: m.net_points == null ? null : Number(m.net_points),
+      time: m.time == null ? null : Number(m.time),
+      points: m.points == null ? null : Number(m.points),
+    }));
   }
   return out;
 }

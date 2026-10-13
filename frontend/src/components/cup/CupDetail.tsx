@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Button, Badge, TextInput, Label, Modal, ModalHeader, ModalBody, ModalFooter, Checkbox } from 'flowbite-react';
+import { Button, Badge, TextInput, Label, Modal, ModalHeader, ModalBody, ModalFooter, Checkbox, ToggleSwitch } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { useCupStore } from '../../stores/cupStore';
 import { useUIStore } from '../../stores/uiStore';
 import { CATEGORIES, categoryLabel, divisionLabel, formatDate } from '../../utils/constants';
 import { useEscClose } from '../../hooks/useEscClose';
-import ResultsTable, { type ColumnKey } from '../results/ResultsTable';
 import { TbArrowBack, TbPlus, TbTrash, TbPencil } from 'react-icons/tb';
 import useCupExport, { type CupTab } from '../../hooks/useCupExport';
+import CupResultsTable from './CupResultsTable';
+import type { CupResultRow } from '../../types/cup';
 import { MatchPicker } from './CreateCupModal';
 
 const CUP_TABS: { key: CupTab; labelKey: string }[] = [
@@ -16,15 +17,6 @@ const CUP_TABS: { key: CupTab; labelKey: string }[] = [
   { key: 'byCategory', labelKey: 'results.byCategory' },
   { key: 'byTag', labelKey: 'results.byTag' },
 ];
-
-function columnsFor(tab: CupTab, mode: 'hit_factor' | 'points'): ColumnKey[] {
-  const withDivision = tab === 'overall';
-  const base: ColumnKey[] = ['position', 'shooter'];
-  if (withDivision) base.push('division');
-  base.push('matches', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent');
-  base.push(mode === 'hit_factor' ? 'hitFactor' : 'matchPoints');
-  return base;
-}
 
 function AddCupMatchesModal({ show, onClose, cupId, existingIds }: { show: boolean; onClose: () => void; cupId: string; existingIds: string[] }) {
   const { t } = useTranslation();
@@ -98,8 +90,21 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
   const [showAddMatches, setShowAddMatches] = useState(false);
   const [showMinError, setShowMinError] = useState(false);
   const [showMinPartError, setShowMinPartError] = useState(false);
+  const [showAllShooters, setShowAllShooters] = useState(true);
+  const [limitInput, setLimitInput] = useState('3');
 
-  const cupExport = useCupExport(tab);
+  const displayLimit = (): number | null => {
+    if (showAllShooters) return null;
+    const parsed = Number(limitInput);
+    return Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
+  };
+
+  const limitedRows = (rows: CupResultRow[]) => {
+    const limit = displayLimit();
+    return limit != null ? rows.slice(0, limit) : rows;
+  };
+
+  const cupExport = useCupExport(tab, displayLimit());
 
   useEffect(() => { fetchCup(cupId); fetchCupResults(cupId); }, [cupId, fetchCup, fetchCupResults]);
 
@@ -108,6 +113,7 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
     setMinInput(detail.minimum_matches != null ? String(detail.minimum_matches) : '');
     setMinPartInput(detail.minimum_participants != null ? String(detail.minimum_participants) : '');
     setSelectedCats(detail.selected_categories ?? []);
+    setLimitInput(String(detail.minimum_participants ?? 3));
   }, [detail]);
 
   if (!detail) {
@@ -124,7 +130,6 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
   const autoMin = Math.floor(matchCount / 2) + 1;
   const required = results?.minimum_matches ?? detail.minimum_matches ?? autoMin;
   const requiredParticipants = results?.minimum_participants ?? detail.minimum_participants;
-  const columns = columnsFor(tab, mode);
 
   const saveMinimum = async () => {
     setShowMinError(false);
@@ -219,7 +224,7 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
         <Button size="xs" color="light" onClick={() => { setEditName(detail.name); setShowEditCup(true); }}><TbPencil className="mr-1.5" /> {t('common.edit')}</Button>
       </div>
 
-      <div className="flex flex-wrap gap-4 mb-4">
+      <div className="flex flex-wrap gap-4 2xl:gap-24 mb-4">
         <div>
           <Label>{t('cups.minimumMatches')}</Label>
           <div className="flex gap-2 items-center">
@@ -296,26 +301,46 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
       </div>
 
       <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex flex-wrap gap-x-1 border-b border-gray-200 dark:border-gray-700 -mb-px" role="tablist">
           {CUP_TABS.map((tb) => (
             <button
               key={tb.key}
+              role="tab"
+              aria-selected={tab === tb.key}
               onClick={() => setTab(tb.key)}
-              className={`px-3 py-1.5 text-sm font-medium rounded-t-lg border-b-2 whitespace-nowrap ${
+              className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 tab === tb.key
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400'
+                  ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500'
+                  : 'cursor-pointer border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
               }`}
             >
               {t(tb.labelKey)}
             </button>
           ))}
         </div>
-        <div className="flex gap-2 no-print">
-          <Button size="xs" color="light" onClick={cupExport.handlePrint}>🖨 {t('common.print')}</Button>
-          <Button size="xs" color="blue" onClick={cupExport.handlePDF}>{t('results.pdf')}</Button>
-          <Button size="xs" color="blue" onClick={cupExport.handleCSV}>{t('results.csv')}</Button>
-          <Button size="xs" color="light" onClick={cupExport.handleHTML}>{t('results.html')}</Button>
+        
+        <div className="flex items-center gap-3 flex-wrap no-print">
+          <div className="flex items-center gap-2">
+            <ToggleSwitch
+              checked={showAllShooters}
+              onChange={(v) => setShowAllShooters(v)}
+              label={t('cups.showAllShooters')}
+            />
+            {!showAllShooters && (
+              <TextInput
+                type="number" min={1} className="w-20"
+                value={limitInput}
+                title={t('cups.shootersToShow')}
+                onChange={(e) => setLimitInput(e.target.value)}
+              />
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button size="xs" color="light" onClick={cupExport.handlePrint}>🖨 {t('common.print')}</Button>
+            <Button size="xs" color="blue" onClick={cupExport.handlePDF}>{t('results.pdf')}</Button>
+            <Button size="xs" color="blue" onClick={cupExport.handleCSV}>{t('results.csv')}</Button>
+            <Button size="xs" color="light" onClick={cupExport.handleHTML}>{t('results.html')}</Button>
+          </div>
         </div>
       </div>
 
@@ -332,7 +357,7 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
             .map(([division, rows]) => (
               <div key={division} className="mb-6">
                 <h3 className="font-semibold text-lg mb-2 dark:text-white">{divisionLabel(division)}</h3>
-                <ResultsTable results={rows} columns={columns} />
+                <CupResultsTable rows={limitedRows(rows)} matches={results.matches} mode={mode} hasDivision={false} />
               </div>
             ))}
           {Object.keys(results.results.byDivision).length === 0 && (
@@ -343,7 +368,7 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
 
       {results && results.matches.length > 0 && tab === 'overall' && (
         <div>
-          <ResultsTable results={results.results.overall} columns={columns} />
+          <CupResultsTable rows={limitedRows(results.results.overall)} matches={results.matches} mode={mode} hasDivision={true} />
         </div>
       )}
 
@@ -360,7 +385,7 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
                   .map(([division, rows]) => (
                     <div key={division} className="mb-4 ml-2">
                       <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
-                      <ResultsTable results={rows} columns={columns} />
+                      <CupResultsTable rows={limitedRows(rows)} matches={results.matches} mode={mode} hasDivision={false} />
                     </div>
                   ))}
               </div>
@@ -380,7 +405,7 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
                   .map(([division, rows]) => (
                     <div key={division} className="mb-4 ml-2">
                       <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
-                      <ResultsTable results={rows} columns={columns} />
+                      <CupResultsTable rows={limitedRows(rows)} matches={results.matches} mode={mode} hasDivision={false} />
                     </div>
                   ))}
               </div>
