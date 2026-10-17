@@ -17,6 +17,7 @@
 - [Authentication](#authentication)
 - [WinMSS Import](#winmss-import)
 - [Electron Desktop App](#electron-desktop-app)
+- [Android App (standalone)](#android-app-standalone)
 - [Internationalization](#internationalization)
 - [Windows Compatibility](#windows-compatibility)
 - [Coding Principles](#coding-principles)
@@ -357,6 +358,34 @@ On first launch, `pg-manager.ts` initializes a PostgreSQL data directory, starts
 The `afterPack` hook thins universal Mach-O binaries per-architecture so `@electron/universal` can merge them correctly for macOS universal builds.
 
 The LAN URL is displayed in the admin header UI for mobile access.
+
+---
+
+## Android App (standalone)
+
+The Android build runs **entirely on the device** — no computer, no server, no
+network. It ships the same React frontend inside a Capacitor shell, but with the
+HTTP/PostgreSQL data client swapped for an on-device SQLite one.
+
+- **Shell** — `mobile/` (Capacitor 8), native project in `mobile/android/`
+- **Frontend** — the same `frontend/` build, pointed at by `webDir`
+- **Data** — SQLite via `@capacitor-community/sqlite`, schema in
+  `frontend/src/services/data/sqlite/schema.ts`
+- **Shared domain** — `packages/core/` holds every scoring formula and domain
+  type so the phone, the browser and the desktop backend cannot drift apart
+
+```bash
+npm install
+npm run build:android:debug     # assemble a debug APK
+npm run open:android            # or open in Android Studio
+```
+
+Requires **JDK 21** and the Android SDK (platform 36). The first build downloads
+Gradle dependencies.
+
+Not yet implemented on Android: WinMSS/CSV import, match export, backup/restore,
+cups, and stage images. Full details, the PostgreSQL→SQLite mapping and the
+remaining work are in [`docs/android.md`](docs/android.md).
 
 ---
 

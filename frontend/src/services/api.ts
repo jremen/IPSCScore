@@ -1,5 +1,7 @@
 import type { ScoringProgress } from '../types/scoring';
 import { FETCH_TIMEOUT_MS, REFRESH_TIMEOUT_MS } from './connectivity';
+import { isLocalRuntime } from './data/platform';
+import { createLocalClient } from './data/sqlite/client';
 
 // Use empty string so all API calls go to same origin — Vite dev proxy forwards /api/* to backend
 // In production, serve frontend from backend or set VITE_API_URL to the backend URL
@@ -127,7 +129,7 @@ async function uploadImage(path: string, file: File): Promise<{ image_path: stri
 }
 
 // Matches
-export const api = {
+const httpApi = {
   // Auth
   auth: {
     adminLogin: async (password: string): Promise<{ token: string; role: string; error?: string }> => {
@@ -580,3 +582,15 @@ export const api = {
     return request(`/api/audit${qs ? '?' + qs : ''}`);
   },
 };
+
+/**
+ * The API surface the UI talks to.
+ *
+ * On web and Electron this is the HTTP/PostgreSQL client above. In the
+ * standalone Android build there is no backend, so every call is served from the
+ * on-device SQLite database instead. Both implement the same shape, so no
+ * component needs to know which runtime it is on.
+ */
+export const api = (
+  isLocalRuntime() ? createLocalClient() : httpApi
+) as unknown as typeof httpApi;
