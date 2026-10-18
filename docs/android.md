@@ -196,6 +196,11 @@ For the full step-by-step guide — setting up `local.properties`, installing ov
 or Wi-Fi (`adb`), live reload, and producing a signed release APK — see
 [`../mobile/README.md`](../mobile/README.md).
 
+Published versions are built for you: pushing a version tag makes
+[`../.github/workflows/release.yml`](../.github/workflows/release.yml) build, sign
+and attach `IPSCScore.apk` to a GitHub Release. See
+[`releasing.md`](releasing.md).
+
 ## What works today
 
 Fully local, offline, no computer required:

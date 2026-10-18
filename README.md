@@ -18,6 +18,7 @@
 - [WinMSS Import](#winmss-import)
 - [Electron Desktop App](#electron-desktop-app)
 - [Android App (standalone)](#android-app-standalone)
+- [Releases](#releases)
 - [Internationalization](#internationalization)
 - [Windows Compatibility](#windows-compatibility)
 - [Coding Principles](#coding-principles)
@@ -389,6 +390,26 @@ Gradle dependencies.
 Not yet implemented on Android: WinMSS/CSV import, match export, backup/restore,
 cups, and stage images. Full details, the PostgreSQL→SQLite mapping and the
 remaining work are in [`docs/android.md`](docs/android.md).
+
+---
+
+## Releases
+
+Versions are published by [`.github/workflows/release.yml`](.github/workflows/release.yml).
+Pushing a version tag builds everything and creates a GitHub Release with the
+changelog and all installers attached — desktop bundles for macOS, Windows (x64 and
+arm64) and Linux, plus the signed Android APK:
+
+```bash
+npm run version:minor
+git commit -am "chore: release 2.6.0"
+git tag v2.6.0
+git push origin main --tags
+```
+
+The Android job signs the APK with the release keystore held in repository secrets,
+so the downloaded `IPSCScore.apk` installs over previous releases. Setup, secrets,
+asset names and troubleshooting: [`docs/releasing.md`](docs/releasing.md).
 
 ---
 

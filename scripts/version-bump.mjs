@@ -17,6 +17,13 @@ const FILES = [
 const DRY_RUN = process.argv.includes('--dry-run');
 const FORCE = process.argv.includes('--force');
 
+// `--check[=x.y.z]` verifies that every manifest in FILES agrees with
+// electron/package.json (the source of truth) and, when a version is given,
+// that they also match it. Used by the release workflow to refuse to publish a
+// tag whose version was never bumped. Unlike the bump modes it never writes.
+const CHECK_ARG = process.argv.find((a) => a === '--check' || a.startsWith('--check='));
+const CHECK_VERSION = CHECK_ARG && CHECK_ARG.includes('=') ? CHECK_ARG.slice('--check='.length) : null;
+
 function bump(version, level) {
   const [major, minor, patch] = version.split('.').map(Number);
   if (level === 'patch') {
@@ -151,6 +158,42 @@ async function main() {
   }
 }
 
+function checkVersions(expected) {
+  const sourcePath = './electron/package.json';
+  const { version } = readJson(resolve(ROOT, sourcePath));
+  let ok = validateVersion(version);
+
+  console.log(`Version check — source of truth ${sourcePath} = ${version || '(invalid)'}\n`);
+
+  for (const f of FILES) {
+    const p = resolve(ROOT, f);
+    if (!existsSync(p)) {
+      console.error(`  MISSING  ${f}`);
+      ok = false;
+      continue;
+    }
+    const { version: fileVersion } = readJson(p);
+    const matches = fileVersion === version;
+    if (!matches) ok = false;
+    console.log(`  ${matches ? 'ok  ' : 'FAIL'}  ${f}  ${fileVersion}`);
+  }
+
+  if (expected) {
+    const matches = version === expected;
+    if (!matches) ok = false;
+    console.log(`\n  ${matches ? 'ok  ' : 'FAIL'}  requested version  ${expected}`);
+  }
+
+  if (!ok) {
+    console.error(
+      '\nVersion check failed. Run `node scripts/version-bump.mjs <patch|minor|major>` and commit the result.'
+    );
+    process.exit(1);
+  }
+
+  console.log(`\nAll ${FILES.length} manifests agree${expected ? ` and match ${expected}.` : '.'}`);
+}
+
 async function dryRun() {
   console.log('Dry-run preview:\n');
   for (const f of FILES) {
@@ -169,7 +212,9 @@ async function dryRun() {
   }
 }
 
-if (DRY_RUN && !levelArg) {
+if (CHECK_ARG) {
+  checkVersions(CHECK_VERSION);
+} else if (DRY_RUN && !levelArg) {
   await dryRun();
 } else {
   await main();

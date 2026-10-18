@@ -6,6 +6,7 @@ No backend, no computer, and no network are required at runtime.
 
 - Architecture and design notes: [`../docs/android.md`](../docs/android.md)
 - What works and what is not implemented yet on Android: [Feature coverage](#feature-coverage)
+- How releases are published (CI, signing secrets): [`../docs/releasing.md`](../docs/releasing.md)
 
 ---
 
@@ -327,6 +328,27 @@ You can also use Android Studio: **Build → Generate Signed App Bundle / APK**.
 > `INSTALL_FAILED_UPDATE_INCOMPATIBLE` — different signing keys. Run
 > `adb uninstall com.ipscscore.app` first, which deletes the on-device database. To move
 > existing data across, back it up from the old install before uninstalling.
+
+### 9.5 Automated releases (GitHub Actions)
+
+You do not have to build the release APK by hand. Pushing a version tag makes
+[`.github/workflows/release.yml`](../.github/workflows/release.yml) build and sign it
+on CI and attach it to a GitHub Release alongside the desktop installers:
+
+```bash
+npm run version:minor
+git commit -am "chore: release 2.6.0"
+git tag v2.6.0
+git push origin main --tags
+```
+
+The keystore lives in repository secrets (`ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`) — the same
+key you generated in [§9.1](#91-generate-a-keystore-once), so a CI-built APK installs
+over your local installs. The asset is named `IPSCScore.apk`, identical to a local
+`npm run build:android:release` apart from the machine that produced it.
+
+Full guide, including the secret setup: [`../docs/releasing.md`](../docs/releasing.md).
 
 ---
 

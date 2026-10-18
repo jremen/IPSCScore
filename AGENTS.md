@@ -136,4 +136,14 @@ npm run version:minor
 npm run version:major
 node scripts/version-bump.mjs           # fully interactive
 node scripts/version-bump.mjs patch --dry-run   # preview only
-The script edits the four files and prints a diff. It does not commit or tag — do that yourself after review.
+node scripts/version-bump.mjs --check           # verify every manifest agrees
+node scripts/version-bump.mjs --check=2.6.0     # ...and matches a version
+```
+
+The script edits the six files in `FILES` and prints a diff. It does not commit or
+tag — do that yourself after review.
+
+A release is published by pushing the tag: `.github/workflows/release.yml` builds the
+desktop installers and the signed Android APK for the tagged version and attaches them
+to a GitHub Release with a generated changelog. Setup, secrets and troubleshooting:
+`docs/releasing.md`.

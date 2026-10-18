@@ -1,6 +1,6 @@
 {
   "name": "ipscscore-mobile",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "private": true,
   "description": "IPSCScore Android shell (Capacitor)",
   "type": "module",
