@@ -1,6 +1,6 @@
 {
   "name": "ipscscore-frontend",
-  "version": "2.5.0",
+  "version": "2.5.3",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,6 +13,11 @@
     "seed:help-fixture": "tsx scripts/seed-help-fixture.ts"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "^8.1.1",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3",
+    "@ipscscore/core": "*",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",

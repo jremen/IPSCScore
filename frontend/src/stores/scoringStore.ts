@@ -5,7 +5,7 @@ import { isNetworkError, shouldAttemptApiCall } from '../services/connectivity';
 import { useUIStore } from './uiStore';
 import type { ScoringAlert, ScoreInput, RegistrationWithShooter, ScoringProgress } from '../types/scoring';
 import type { Stage } from '../types/stage';
-import { buildEmptyScore } from '../utils/buildEmptyScore';
+import { buildEmptyScore, hydrateScore } from '../utils/buildEmptyScore';
 import { buildScorePayload } from '../utils/buildScorePayload';
 import { shuffleWithSeed } from '../utils/shuffleWithSeed';
 
@@ -211,7 +211,7 @@ export const useScoringStore = create<ScoringState & ScoringActions>((set, get) 
     } catch { /* IDB error — proceed to network path */ }
 
     if (cachedData) {
-      set({ currentScore: parseScore(cachedData), isExistingScore: true, isOfflineMode: true });
+      set({ currentScore: hydrateScore(stage, parseScore(cachedData)), isExistingScore: true, isOfflineMode: true });
     }
 
     // If online and reachable, try API in background to refresh with fresh data.
@@ -226,8 +226,13 @@ export const useScoringStore = create<ScoringState & ScoringActions>((set, get) 
       if (hasScoredEntry || cachedData || sp == null) {
         try {
           const result = await api.getShooterScore(matchId, stageId, registrationId);
-          set({ currentScore: parseScore(result), isExistingScore: true, isOfflineMode: false });
-          offlineDB.cacheScore(matchId, stageId, registrationId, result).catch(() => {});
+          // The local runtime resolves with null where the HTTP backend 404s.
+          if (result) {
+            set({ currentScore: hydrateScore(stage, parseScore(result)), isExistingScore: true, isOfflineMode: false });
+            offlineDB.cacheScore(matchId, stageId, registrationId, result).catch(() => {});
+          } else if (!cachedData) {
+            set({ currentScore: buildEmptyScore(stage), isExistingScore: false, isOfflineMode: true });
+          }
         } catch {
           // API failed — keep cached data if available, otherwise show empty
           if (!cachedData) {

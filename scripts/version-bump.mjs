@@ -10,6 +10,8 @@ const FILES = [
   './frontend/package.json',
   './backend/package.json',
   './electron/package.json',
+  './packages/core/package.json',
+  './mobile/package.json',
 ];
 
 const DRY_RUN = process.argv.includes('--dry-run');
@@ -132,7 +134,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Bumping all 4 files from ${currentVersion} to ${newVersion}\n`);
+  console.log(`Bumping ${FILES.length} manifests from ${currentVersion} to ${newVersion}\n`);
 
   for (const f of FILES) {
     const p = resolve(ROOT, f);

@@ -12,6 +12,8 @@ import type { RegistrationWithShooter } from '../../types/scoring';
 import { twMerge } from "tailwind-merge";
 import { seedGroupColors } from '../../utils/groupColors';
 import { generateSquaddingPdf } from '../../utils/squaddingPdf';
+import { nativeSaveAs, saveBlobToDevice } from '../../utils/exportUtils';
+import { useUIStore } from '../../stores/uiStore';
 
 interface SquaddingModalProps {
   show: boolean;
@@ -22,6 +24,7 @@ interface SquaddingModalProps {
 
 export default function SquaddingModal({ show, onClose, matchId, onUpdated }: SquaddingModalProps) {
   const { t } = useTranslation();
+  const addToast = useUIStore((s) => s.addToast);
   const {
     registrations,
     columns,
@@ -109,28 +112,15 @@ export default function SquaddingModal({ show, onClose, matchId, onUpdated }: Sq
     const baseName = matchName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     const defaultName = `${baseName}_squadding.pdf`;
 
-    if ('showSaveFilePicker' in window) {
-      try {
-        const handle = await (window as any).showSaveFilePicker({
-          suggestedName: defaultName,
-          types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }],
-        });
-        const writable = await handle.createWritable();
-        await writable.write(blob);
-        await writable.close();
-        return;
-      } catch (err: any) {
-        if (err.name === 'AbortError') return;
-      }
-    }
+    // Desktop: let the user pick a destination. On device: write to Documents.
+    const pickedFile = await nativeSaveAs(blob, defaultName, [
+      { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } },
+    ]);
+    if (pickedFile) return;
 
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = defaultName;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [columns, matchId]);
+    const saved = await saveBlobToDevice(blob, defaultName);
+    addToast(t(saved ? 'results.pdfExported' : 'results.exportFailed'), saved ? 'success' : 'error');
+  }, [columns, matchId, addToast, t]);
 
   const showUnassigned = unassigned.length > 0;
 

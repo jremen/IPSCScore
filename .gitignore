@@ -12,3 +12,9 @@ uploads/*
 .vscode/
 yarn.lock
 *.tsbuildinfo
+
+# Android / Capacitor signing material — never commit these
+*.keystore
+*.jks
+mobile/android/keystore.properties
+mobile/android/local.properties

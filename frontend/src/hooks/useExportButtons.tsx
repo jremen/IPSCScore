@@ -5,7 +5,7 @@ import { useMatchStore } from "../stores/matchStore";
 import { useResultsStore } from "../stores/resultsStore";
 import { categoryLabel, divisionLabel } from "../utils/constants";
 import { formatHitFactor, hasHitFactor } from "../utils/hitFactor";
-import { nativeSaveAs, downloadBlob, formatDateLong, MARGIN, TITLE_SIZE, SUBTITLE_SIZE, TABLE_STYLE } from "../utils/exportUtils";
+import { nativeSaveAs, saveBlobToDevice, formatDateLong, MARGIN, TITLE_SIZE, SUBTITLE_SIZE, TABLE_STYLE } from "../utils/exportUtils";
 import { useTranslation } from "react-i18next";
 import { loadPdfFonts, setBoldFont, setRegularFont } from "../utils/pdfFont";
 import { triggerPrint } from "../utils/print";
@@ -52,14 +52,16 @@ const useExportButtons = (activeTab: ResultTab) => {
     setSaveModal({ open: true, filename: defaultName, blob, extension });
   }, [addToast, t]);
 
-  const confirmSave = () => {
+  const confirmSave = async () => {
     if (!saveModal) return;
-    const filename = saveModal.filename.endsWith(`.${saveModal.extension}`)
+    const { blob, extension } = saveModal;
+    const filename = saveModal.filename.endsWith(`.${extension}`)
       ? saveModal.filename
-      : `${saveModal.filename}.${saveModal.extension}`;
-    downloadBlob(saveModal.blob, filename);
+      : `${saveModal.filename}.${extension}`;
     setSaveModal(null);
-    addToast(t('results.fileExported'), 'success');
+    // On device this writes to Documents/IPSCScore/; in the browser it downloads.
+    const saved = await saveBlobToDevice(blob, filename);
+    addToast(t(saved ? 'results.fileExported' : 'results.exportFailed'), saved ? 'success' : 'error');
   };
 
   // ── CSV: client-side generation ──────────────────────────────────────

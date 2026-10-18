@@ -1,0 +1,26 @@
+{
+  "name": "ipscscore-mobile",
+  "version": "2.5.3",
+  "private": true,
+  "description": "IPSCScore Android shell (Capacitor)",
+  "type": "module",
+  "scripts": {
+    "build:web": "cd ../frontend && npm run build",
+    "add:android": "cap add android",
+    "sync": "cap sync android",
+    "open": "cap open android",
+    "build:android:debug": "npm run build:web && cap sync android && cd android && ./gradlew assembleDebug",
+    "build:android:release": "npm run build:web && cap sync android && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor-community/sqlite": "^8.1.1",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "typescript": "^5.7.0"
+  }
+}
