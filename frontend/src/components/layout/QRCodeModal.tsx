@@ -3,7 +3,9 @@ import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-rea
 import { useTranslation } from 'react-i18next';
 import { useLanUrl } from '../../hooks/useLanUrl';
 import { useQRCode } from '../../hooks/useQRCode';
+import { useUIStore } from '../../stores/uiStore';
 import { generateSingleQrPdf } from '../../utils/qrPdf';
+import { saveBlobToDevice } from '../../utils/exportUtils';
 import { triggerPrint } from '../../utils/print';
 import { useEscClose } from '../../hooks/useEscClose';
 import { BsPrinter, BsFilePdf, BsCopy, BsCheckCircle } from 'react-icons/bs';
@@ -31,6 +33,7 @@ export default function QRCodeModal({ show, onClose, mode }: QRCodeModalProps) {
 
   const qr = useQRCode(url, { width: 512, margin: 2 });
   const [copied, setCopied] = useState(false);
+  const addToast = useUIStore((s) => s.addToast);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -62,11 +65,13 @@ export default function QRCodeModal({ show, onClose, mode }: QRCodeModalProps) {
         qr,
         label: printLabel,
       });
-      doc.save(`ipsc-score-${mode}-qr-code.pdf`);
+      const saved = await saveBlobToDevice(doc.output('blob'), `ipsc-score-${mode}-qr-code.pdf`);
+      addToast(t(saved ? 'results.pdfExported' : 'results.exportFailed'), saved ? 'success' : 'error');
     } catch (err) {
       console.error('Failed to generate QR PDF:', err);
+      addToast(t('results.exportFailed'), 'error');
     }
-  }, [qr, url, label, mode]);
+  }, [qr, url, label, mode, printLabel, addToast, t]);
 
   return (
     <Modal show={show} onClose={onClose} size="xl" dismissible>

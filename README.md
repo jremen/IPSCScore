@@ -383,6 +383,9 @@ npm run open:android            # or open in Android Studio
 Requires **JDK 21** and the Android SDK (platform 36). The first build downloads
 Gradle dependencies.
 
+**Step-by-step build and device-install guide (USB, Wi-Fi, release signing):
+[`mobile/README.md`](mobile/README.md).**
+
 Not yet implemented on Android: WinMSS/CSV import, match export, backup/restore,
 cups, and stage images. Full details, the PostgreSQL→SQLite mapping and the
 remaining work are in [`docs/android.md`](docs/android.md).

@@ -3,7 +3,8 @@ import { Button } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { useMatchStore } from '../../stores/matchStore';
 import { useUIStore } from '../../stores/uiStore';
-import { generateScoreSheetPdf, nativeSaveAs, downloadBlob } from '../../utils/scoreSheetPdf';
+import { generateScoreSheetPdf } from '../../utils/scoreSheetPdf';
+import { nativeSaveAs, saveBlobToDevice } from '../../utils/exportUtils';
 import type { Stage } from '../../types/stage';
 import ScoreSheetCountModal from './ScoreSheetCountModal';
 import { useTabMenuAction } from '../../hooks/useTabMenuAction';
@@ -49,14 +50,13 @@ export default function PrintScoreSheetButton({ stages }: { stages: Stage[] }) {
       const pdfBlob = doc.output('blob');
       const defaultName = `${baseName}_score_sheets.pdf`;
 
-      const saved = await nativeSaveAs(pdfBlob, defaultName, [
+      // Desktop: let the user pick a destination. On device: write to Documents.
+      const pickedFile = await nativeSaveAs(pdfBlob, defaultName, [
         { description: 'PDF file', accept: { 'application/pdf': ['.pdf'] } },
       ]);
 
-      if (!saved) {
-        downloadBlob(pdfBlob, defaultName);
-      }
-      addToast(t('stages.pdfGenerated'), 'success');
+      const saved = pickedFile || (await saveBlobToDevice(pdfBlob, defaultName));
+      addToast(t(saved ? 'stages.pdfGenerated' : 'results.exportFailed'), saved ? 'success' : 'error');
     } catch (err: any) {
       console.error('Score sheet PDF error:', err);
       addToast(err.message || 'PDF generation failed', 'error');

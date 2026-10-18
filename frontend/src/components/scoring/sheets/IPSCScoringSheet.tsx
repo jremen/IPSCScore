@@ -40,6 +40,8 @@ export default function IPSCScoringSheet({ stage, score }: Props) {
   } = useIPSCScoring(stage, score);
 
   const hasNoShootTargets = stage.no_shoot_targets > 0;
+  const hasAnyTargets =
+    paperTargets.length > 0 || steelTargets.length > 0 || npmTargets.length > 0 || noShootTargets.length > 0;
 
   // Subtitle showing stage composition
   const subtitleParts = [];
@@ -120,6 +122,11 @@ export default function IPSCScoringSheet({ stage, score }: Props) {
                   onResetNpm={handleResetNpm}
                 />
               )
+            )}
+            {!hasAnyTargets && (
+              <div className="mx-3 my-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-200">
+                {t('scoring.noTargetsConfigured')}
+              </div>
             )}
           </div>
 

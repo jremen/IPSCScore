@@ -1,4 +1,36 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+// ── App version ──────────────────────────────────────────────────────────
+// Mirrors mobile/package.json, which scripts/version-bump.mjs keeps in step with
+// the rest of the workspace. versionCode must increase with every released build.
+def appManifest = new JsonSlurper().parseText(rootProject.file('../../package.json').text)
+def appVersionName = appManifest.version
+def appVersionParts = appVersionName.tokenize('.')
+def appVersionMajor = appVersionParts.size() > 0 && appVersionParts[0].isInteger() ? appVersionParts[0].toInteger() : 0
+def appVersionMinor = appVersionParts.size() > 1 && appVersionParts[1].isInteger() ? appVersionParts[1].toInteger() : 0
+def appVersionPatch = appVersionParts.size() > 2 && appVersionParts[2].isInteger() ? appVersionParts[2].toInteger() : 0
+def appVersionCode = appVersionMajor * 10000 + appVersionMinor * 100 + appVersionPatch
+
+// ── Release signing ──────────────────────────────────────────────────────
+// Credentials live in mobile/android/keystore.properties (gitignored); see
+// mobile/README.md §9. Debug builds do not need them. A release build without
+// them is refused, because Gradle would otherwise emit an unsigned APK that
+// Android rejects with INSTALL_PARSE_FAILED_NO_CERTIFICATES.
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+def hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
+if (!hasReleaseKeystore && gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }) {
+    throw new GradleException(
+        "Release signing is not configured: ${keystorePropertiesFile.absolutePath} is missing.\n" +
+        "Create the keystore once with keytool, then write keystore.properties — see mobile/README.md §9."
+    )
+}
 
 android {
     namespace = "com.ipscscore.app"
@@ -7,8 +39,8 @@ android {
         applicationId "com.ipscscore.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +48,23 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            release {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseKeystore) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }

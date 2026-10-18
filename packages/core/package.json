@@ -1,6 +1,6 @@
 {
   "name": "@ipscscore/core",
-  "version": "2.5.0",
+  "version": "2.5.3",
   "private": true,
   "description": "Shared IPSCScore domain types and scoring calculations",
   "type": "module",

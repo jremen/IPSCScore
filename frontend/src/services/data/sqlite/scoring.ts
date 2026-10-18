@@ -202,7 +202,7 @@ export async function saveScore(
   stageId: string,
   registrationId: string,
   payload: SaveScorePayload,
-): Promise<{ score: any; calcResult: CalculatedScore }> {
+): Promise<Record<string, any>> {
   const stage = await one<StageRow>(
     `SELECT id, match_id, scoring_type, hits_per_paper, par_time, max_points, config
      FROM stages WHERE id = ?`,
@@ -339,7 +339,10 @@ export async function saveScore(
   });
 
   const saved = await getShooterScore(matchId, stageId, registrationId);
-  return { score: saved, calcResult: calc };
+  // Mirror the HTTP backend's response shape — the saved score fields at the
+  // top level plus calcResult — so callers that cache the response can read it
+  // back through the same parser as the web/Electron builds.
+  return { ...(saved ?? {}), calcResult: calc };
 }
 
 /**
@@ -350,13 +353,12 @@ export async function saveScore(
  */
 export async function recalculateStage(matchId: string, stageId: string): Promise<void> {
   const stage = await one<StageRow>(
-    `SELECT id, match_id, scoring_type, hits_per_paper, par_time, max_points, config
+    `SELECT id, match_id, scoring_type, hits_per_paper, par_time, max_points
      FROM stages WHERE id = ?`,
     [stageId],
   );
   if (!stage) return;
 
-  const config = parseJson<StageConfig>(stage.config, {});
   const maxPoints = Number(stage.max_points) || 0;
   const scoringType = stage.scoring_type;
 

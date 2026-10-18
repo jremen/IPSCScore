@@ -86,3 +86,34 @@ export function buildEmptyScore(stage: Stage): ScoreInput {
     }
   }
 }
+
+/**
+ * Overlay a persisted or cached score on the target skeleton implied by the
+ * stage's *current* configuration.
+ *
+ * Target counts live on the stage, not on the score, so a score that was saved
+ * before the stage gained targets — or one read back from a cache that was
+ * populated while the stage still had none — would render a scoring sheet with
+ * no target fields at all. Existing values always win; this only fills the gaps.
+ */
+export function hydrateScore(stage: Stage, score: ScoreInput): ScoreInput {
+  const skeleton = buildEmptyScore(stage);
+
+  const existingKeys = new Set(score.targets.map((t) => `${t.target_type}:${t.target_index}`));
+  const missingTargets = skeleton.targets.filter(
+    (t) => !existingKeys.has(`${t.target_type}:${t.target_index}`),
+  );
+
+  // Ring / string sheets read score_data; fill in keys the saved score predates.
+  const score_data = skeleton.score_data
+    ? { ...skeleton.score_data, ...score.score_data }
+    : score.score_data;
+
+  if (missingTargets.length === 0 && score_data === score.score_data) return score;
+
+  return {
+    ...score,
+    targets: missingTargets.length > 0 ? [...score.targets, ...missingTargets] : score.targets,
+    score_data,
+  };
+}

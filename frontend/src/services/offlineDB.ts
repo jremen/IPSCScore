@@ -366,12 +366,31 @@ export async function getCachedScoringProgress(matchId: string): Promise<Scoring
 
 // ── Scores ─────────────────────────────────────────────────────────────────
 
+/** Cache bookkeeping keys — a score-less placeholder record holds only these. */
+const SCORE_CACHE_KEYS = ['matchId', 'stageId', 'registrationId'];
+
+/**
+ * A cached score is only usable when it carries an actual score payload.
+ *
+ * Older builds cached the result of "no score yet" (the HTTP backend 404s, but
+ * the local runtime resolves with `null`), producing records containing nothing
+ * but the cache keys. Reading one back presented an empty score to the scoring
+ * sheet instead of a freshly built one.
+ */
+function hasScorePayload(record: Record<string, unknown>): boolean {
+  return Object.keys(record).some((key) => !SCORE_CACHE_KEYS.includes(key));
+}
+
 export async function cacheScore(
   matchId: string,
   stageId: string,
   registrationId: string,
   score: any,
 ): Promise<void> {
+  // A falsy score means "nothing scored yet" — caching the placeholder would
+  // later be mistaken for a real, target-less score.
+  if (!score) return;
+
   const { store, tx } = await getStore('scores', 'readwrite');
   store.put({
     ...score,
@@ -391,8 +410,9 @@ export async function getCachedScore(
   const request = store.get([stageId, registrationId]);
   const result = await promisify<any>(request);
   // Verify it belongs to the right match
-  if (result && result.matchId === matchId) return result;
-  return null;
+  if (!result || result.matchId !== matchId) return null;
+  // Ignore placeholder records left behind by older builds.
+  return hasScorePayload(result) ? result : null;
 }
 
 // ── Matches cache ──────────────────────────────────────────────────────────

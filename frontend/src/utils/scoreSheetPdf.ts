@@ -648,32 +648,3 @@ function getPaperColumnWidths(hasNoShoot: boolean, colWidth: number): Record<str
   }
   return cols;
 }
-
-// ── Save helpers ────────────────────────────────────────────────────────
-
-export async function nativeSaveAs(
-  blob: Blob,
-  defaultName: string,
-  types: { description: string; accept: Record<string, string[]> }[]
-): Promise<boolean> {
-  if (!('showSaveFilePicker' in window)) return false;
-  try {
-    const handle = await (window as any).showSaveFilePicker({ suggestedName: defaultName, types });
-    const writable = await handle.createWritable();
-    await writable.write(blob);
-    await writable.close();
-    return true;
-  } catch (err: any) {
-    if (err.name === 'AbortError') return false;
-    return false;
-  }
-}
-
-export function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}

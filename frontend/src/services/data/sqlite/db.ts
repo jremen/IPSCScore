@@ -13,6 +13,17 @@ export const DB_NAME = 'ipscscore';
 let connection: SQLiteDBConnection | null = null;
 let opening: Promise<SQLiteDBConnection> | null = null;
 
+/**
+ * True while an explicit transaction opened by `transaction()` is in flight.
+ *
+ * The Capacitor SQLite plugin wraps every `run`/`execute` in its own implicit
+ * transaction by default (`transaction = true`). Nesting that inside our
+ * explicit `beginTransaction()` makes it try a second `BEGIN`, which the native
+ * layer rejects with "Already in transaction". The helpers below therefore pass
+ * `transaction = false` whenever our own transaction is open.
+ */
+let inTransaction = false;
+
 /** Values SQLite accepts once booleans/undefined have been normalised. */
 export type SqlValue = string | number | null;
 
@@ -69,8 +80,11 @@ async function openConnection(): Promise<SQLiteDBConnection> {
 async function applySchema(db: SQLiteDBConnection): Promise<void> {
   await db.execute('PRAGMA foreign_keys = ON;');
 
+  // NOTE: sqlite_master has no `value` column — only name/type/sql/… — so probe
+  // for the table's name, not a value. Querying `value` throws
+  // "no such column: value" on every launch, before login is even attempted.
   const { values } = await db.query(
-    `SELECT value FROM sqlite_master WHERE type = 'table' AND name = 'meta'`,
+    `SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'meta'`,
   );
 
   if (!values || values.length === 0) {
@@ -156,13 +170,13 @@ export async function one<T = Record<string, unknown>>(
 
 export async function run(sql: string, values: unknown[] = []): Promise<number> {
   const db = await getDb();
-  const result = await db.run(sql, values.map(normalizeValue));
+  // Let the plugin manage its own transaction only when we are not already
+  // inside one; otherwise the extra BEGIN fails with "Already in transaction".
+  const result = await db.run(sql, values.map(normalizeValue), !inTransaction);
   return result.changes?.changes ?? 0;
 }
 
 // ── Transactions ─────────────────────────────────────────────────────────
-
-let inTransaction = false;
 
 /**
  * Run `fn` inside a single SQLite transaction.
@@ -180,7 +194,15 @@ export async function transaction<T>(fn: () => Promise<T>): Promise<T> {
   }
 
   inTransaction = true;
-  await db.beginTransaction();
+  try {
+    await db.beginTransaction();
+  } catch (error) {
+    // Don't leave the flag set if the BEGIN itself failed — otherwise every
+    // later call would skip its own transaction.
+    inTransaction = false;
+    throw error;
+  }
+
   try {
     const result = await fn();
     await db.commitTransaction();
