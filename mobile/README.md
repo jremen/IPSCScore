@@ -119,7 +119,7 @@ That single command does three things:
 The result is written to:
 
 ```
-mobile/android/app/build/outputs/apk/debug/app-debug.apk
+mobile/android/app/build/outputs/apk/debug/IPSCScore-debug.apk
 ```
 
 The **first** build takes several minutes because Gradle, the Android Gradle Plugin, and the
@@ -160,7 +160,7 @@ cd mobile/android
 ### Option B — install an APK you already built
 
 ```bash
-adb install -r mobile/android/app/build/outputs/apk/debug/app-debug.apk
+adb install -r mobile/android/app/build/outputs/apk/debug/IPSCScore-debug.apk
 ```
 
 `-r` replaces an existing installation **and keeps the local database**.
@@ -295,22 +295,24 @@ Nothing to add — `mobile/android/app/build.gradle` already loads `keystore.pro
 applies it via `signingConfigs.release`. Two behaviours are worth knowing:
 
 - With `keystore.properties` present, `release` builds are signed and land in
-  `app-release.apk`.
+  `IPSCScore.apk`.
 - Without it, any `*Release` task **fails immediately** with a message pointing here. That is
   deliberate: an unsigned release APK builds fine but Android refuses to install it.
+- Both build types are named after the app instead of the Gradle module:
+  `IPSCScore.apk` for release, `IPSCScore-debug.apk` for debug.
 
 ### 9.4 Build
 
 ```bash
 npm run build:android:release
-adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk
+adb install -r mobile/android/app/build/outputs/apk/release/IPSCScore.apk
 ```
 
 Verify the signature before shipping:
 
 ```bash
 $ANDROID_HOME/build-tools/36.0.0/apksigner verify --print-certs \
-  mobile/android/app/build/outputs/apk/release/app-release.apk
+  mobile/android/app/build/outputs/apk/release/IPSCScore.apk
 ```
 
 You can also use Android Studio: **Build → Generate Signed App Bundle / APK**.
@@ -336,7 +338,7 @@ You can also use Android Studio: **Build → Generate Signed App Bundle / APK**.
 | `SDK location not found` | Create `mobile/android/local.properties` with `sdk.dir=…`, or export `ANDROID_HOME`. |
 | `adb: command not found` | Add `$ANDROID_HOME/platform-tools` to `PATH`. |
 | `INSTALL_FAILED_UPDATE_INCOMPATIBLE` | The installed copy was signed with a different key.<br>`adb uninstall com.ipscscore.app`, then install again. This also deletes the on-device database. |
-| `INSTALL_PARSE_FAILED_NO_CERTIFICATES` | The APK is unsigned — you picked up `app-release-unsigned.apk`, or built before signing was configured. Create `mobile/android/keystore.properties` (see [§9](#9-release-builds)) and rebuild; the release build now refuses to run without it. |
+| `INSTALL_PARSE_FAILED_NO_CERTIFICATES` | The APK is unsigned — you installed a `*-unsigned.apk` or built before signing was configured. Create `mobile/android/keystore.properties` (see [§9](#9-release-builds)) and rebuild; the release build now refuses to run without it. |
 | `Release signing is not configured` during `*Release` | `mobile/android/keystore.properties` is missing. See [§9](#9-release-builds). |
 | Blank / white screen after launch | The web bundle was not synced. Run `npm run build:android:debug` (or `npm run sync:android`), reinstall, and inspect `adb logcat \| grep -i capacitor`. |
 | `cap: command not found` | Run `npm install` at the repository root; the CLI is hoisted there. |

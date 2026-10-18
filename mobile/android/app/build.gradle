@@ -69,6 +69,27 @@ android {
     }
 }
 
+// ── Output file names ────────────────────────────────────────────────────
+// Gradle's defaults are the generic app-release.apk / app-debug.apk. Name the
+// artifacts after the app instead, so a shared or downloaded APK says what it is:
+//
+//   release -> IPSCScore.apk          debug -> IPSCScore-debug.apk
+//
+// A release build only reaches signing when keystore.properties exists (guarded
+// above), so the release name can always be trusted; if the guard is ever bypassed
+// the "-unsigned" suffix keeps such an artifact from being shipped unnoticed.
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def fileName
+        if (variant.buildType == 'release') {
+            fileName = hasReleaseKeystore ? 'IPSCScore.apk' : 'IPSCScore-unsigned.apk'
+        } else {
+            fileName = "IPSCScore-${variant.buildType ?: variant.name}.apk"
+        }
+        variant.outputs.each { output -> output.outputFileName.set(fileName) }
+    }
+}
+
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
