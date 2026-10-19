@@ -1,6 +1,22 @@
 FROM node:22-alpine
 WORKDIR /app
+
+# The frontend depends on the private @ipscscore/core workspace package, so the
+# build context is the repository root and dependencies are installed through
+# npm workspaces — that is what creates node_modules/@ipscscore/core.
+# The root package-lock.json is intentionally NOT copied: it is generated on the
+# host (macOS) and only records that platform's optional native binaries, which
+# breaks `npm install` inside the Alpine container. A lockfile-free install lets
+# npm resolve the correct linux-musl optional dependencies. Manifests are copied
+# first so the install layer is cached across source edits.
 COPY package.json ./
-RUN npm install
-COPY . .
+COPY packages/core/package.json ./packages/core/
+COPY frontend/package.json ./frontend/
+RUN npm install --workspace frontend
+
+# Sources. docker-compose bind-mounts these in development, but keeping them in
+# the image makes it usable on its own too.
+COPY packages/core ./packages/core
+COPY frontend ./frontend
+
 EXPOSE 5173

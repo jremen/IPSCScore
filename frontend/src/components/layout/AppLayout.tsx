@@ -16,6 +16,8 @@ import Results from '../results/ResultsOverview';
 import AdminLoginPage from '../auth/AdminLoginPage';
 import StageLoginPage from '../auth/StageLoginPage';
 import PublicResultsView from '../results/PublicResultsView';
+import PublicResultsKioskView from '../results/PublicResultsKioskView';
+import { isKioskResultsPath } from '../../utils/domainPaths';
 import PublicSquadsView from '../squads/PublicSquadsView';
 import { shouldAttemptApiCall } from '../../services/connectivity';
 import { useTranslation } from 'react-i18next';
@@ -178,8 +180,9 @@ export default function AppLayout() {
   }, [activeMatchId]);
 
   // Domain mode: /results → show public results (no login needed)
+  // `/results/kiosk` is the TV kiosk variant of the same public view.
   if (domainMode === 'results') {
-    return <PublicResultsView />;
+    return isKioskResultsPath() ? <PublicResultsKioskView /> : <PublicResultsView />;
   }
 
   // Domain mode: /squads → show public squads (no login needed)

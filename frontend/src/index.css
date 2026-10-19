@@ -230,4 +230,16 @@
   }
 }
 
+/* TV kiosk — programmatic slow scrolling, no visible scrollbar / no smooth interference */
+.kiosk-viewport {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  overscroll-behavior: contain;
+  scroll-behavior: auto;
+}
+
+.kiosk-viewport::-webkit-scrollbar {
+  display: none;
+}
+
 

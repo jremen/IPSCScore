@@ -36,8 +36,10 @@ services:
 
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
+      # Root context so the frontend image can install the private
+      # @ipscscore/core workspace package (packages/core) via npm workspaces.
+      context: .
+      dockerfile: frontend/Dockerfile.dev
     ports:
       - "5173:5173"
     environment:
@@ -45,12 +47,13 @@ services:
       # Example: 192.168.1.100 — find it with `ipconfig getifaddr en0`
       VITE_HOST: ${VITE_HOST:-}
     volumes:
-      - ./frontend/src:/app/src
-      - ./frontend/index.html:/app/index.html
-      - ./frontend/public:/app/public
+      - ./frontend/src:/app/frontend/src
+      - ./frontend/index.html:/app/frontend/index.html
+      - ./frontend/public:/app/frontend/public
+      - ./packages/core/src:/app/packages/core/src
     depends_on:
       - backend
-    command: npx vite --host 0.0.0.0
+    command: npm run dev --workspace frontend -- --host 0.0.0.0
 
 volumes:
   pgdata:

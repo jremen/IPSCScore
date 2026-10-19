@@ -8,7 +8,7 @@ import { useSSEStore } from "../../stores/sseStore";
 const POLL_INTERVAL_MS = 60000;
 const SSE_FALLBACK_INTERVAL_MS = 300000;
 
-const MatchProgress = () => {
+const MatchProgress = ({size, width}:{size?:"xl" | undefined, width?: string}) => {
 const runningMatchId = useMatchStore((s) => s.runningMatch?.id);
 const activeMatchId = useUIStore((s) => s.activeMatchId);
 const effectiveMatchId = runningMatchId ?? activeMatchId;
@@ -41,9 +41,9 @@ const {scoredLength, stagesLength, registrationsLength, fetchRegistrations, fetc
   return (
     <div className="ml-auto mr-4">
       <Progress
-        className="flex-1 w-48 eink:border eink:border-black! eink:text-white!"
+        className={`flex-1 ${width ? width : "w-48"} eink:border eink:border-black! eink:text-white`}
         color="blue"
-        size="lg"
+        size={size ? size : "lg"}
         progress={progressValue}
         labelProgress
       />

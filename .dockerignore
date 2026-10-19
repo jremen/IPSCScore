@@ -1,0 +1,10 @@
+# Build context is the repository root (see docker-compose.yml) so the
+# frontend image can install the @ipscscore/core workspace package.
+**/node_modules
+**/dist
+**/dist-*
+dist-*
+.git
+.github
+uploads
+*.log

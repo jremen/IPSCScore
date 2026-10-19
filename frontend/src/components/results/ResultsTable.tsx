@@ -19,7 +19,7 @@ interface ResultsTableProps {
 
 const DETAIL_COLUMNS: ColumnKey[] = ['division', 'matches', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'matchPoints', 'stagePercent', 'stagePoints', 'hitFactor', 'netPoints'];
 
-function columnHeader(col: ColumnKey, t: (key: string, opts?: any) => string): string {
+export function columnHeader(col: ColumnKey, t: (key: string, opts?: any) => string): string {
   const map: Record<ColumnKey, string> = {
     position: t('results.position'),
     shooter: t('results.shooter'),
@@ -42,7 +42,7 @@ function columnHeader(col: ColumnKey, t: (key: string, opts?: any) => string): s
   return map[col];
 }
 
-function cellValue(col: ColumnKey, r: any): string {
+export function cellValue(col: ColumnKey, r: any): string {
   switch (col) {
     case 'position': return String(r.position);
     case 'shooter': return `${r.first_name} ${r.last_name}`;
