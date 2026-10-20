@@ -119,6 +119,31 @@
 }
 :root.eink select { background: var(--eink-bg) !important; }
 
+/* Mobile shells draw the WebView under the status bar (Android edge-to-edge,
+   iOS full-screen). Keep the top controls below the clock / notch / cutout.
+
+   Capacitor injects `--safe-area-inset-top` on Android; iOS exposes the same
+   information through the standard `env(safe-area-inset-top)` when the viewport
+   uses `viewport-fit=cover` (see index.html). Whichever is available wins. */
+:root {
+  --app-safe-top: max(var(--safe-area-inset-top, 0px), env(safe-area-inset-top, 0px));
+}
+
+/* Main app header keeps its 0.75rem padding and adds the system inset. */
+.app-header-safe {
+  padding-top: calc(0.75rem + var(--app-safe-top));
+}
+
+/* Public results/squads header is slimmer (0.5rem). */
+.app-public-header-safe {
+  padding-top: calc(0.5rem + var(--app-safe-top));
+}
+
+/* Full-screen login pages keep their 1rem padding and add the system inset. */
+.app-page-safe {
+  padding-top: calc(1rem + var(--app-safe-top));
+}
+
 /* Scoring sheet — mobile-first touch targets (44px minimum) */
 .scoring-btn {
   min-width: 44px;

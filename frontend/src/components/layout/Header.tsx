@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Badge, Button } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '../../stores/uiStore';
@@ -16,6 +16,7 @@ import StagePickerModal from '../scoring/StagePickerModal';
 import HelpModal from '../help/HelpModal';
 import { TbSettings, TbClipboardText, TbHelpCircle } from "react-icons/tb";
 import { useTabMenuAction } from '../../hooks/useTabMenuAction';
+import { Capacitor } from "@capacitor/core";
 
 export default function Header() {
   const activeMatchId = useUIStore((s) => s.activeMatchId);
@@ -32,6 +33,7 @@ export default function Header() {
   const [showDetails, setShowDetails] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const isMobile = useRef(false);
 
   // Load stages for the authenticated match so the details modal has the briefing/image.
   useEffect(() => {
@@ -48,6 +50,12 @@ export default function Header() {
     if (isAdmin) setShowSettings(true);
   });
 
+  useEffect(() => {
+    if(Capacitor.isNativePlatform()) {
+      isMobile.current = true;
+    }
+  })
+
   const handleLogout = () => {
     if (isAdmin) {
       adminLogout();
@@ -58,7 +66,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="relative z-999 bg-gray-900 text-white max-w-screen px-4 py-3 no-print">
+      <header className={`${isMobile.current ? "pt-8" : ""} relative z-999 bg-gray-900 text-white max-w-screen px-4 py-3 no-print`}>
         <div className="flex items-center mb-2">
           <div className="flex items-center gap-3 mr-auto">
             <h1 className="text-lg font-bold tracking-wider">{t('header.title')}</h1>
