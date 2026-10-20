@@ -426,6 +426,8 @@ const httpApi = {
   getSingleStageResults: (matchId: string, stageId: string) => requestRefresh<any>(`/api/matches/${matchId}/results/stages/${stageId}`),
   getCategoryResults: (matchId: string) => requestRefresh<any>(`/api/matches/${matchId}/results/categories`),
   getTagResults: (matchId: string) => requestRefresh<any>(`/api/matches/${matchId}/results/tags`),
+  getPublicMatchProgress: (matchId: string) =>
+    requestRefresh<import('../types/results').PublicMatchProgress>(`/api/matches/${matchId}/results/progress`),
   getShooterStageSummaries: async (matchId: string, registrationId: string): Promise<any> => {
     const res = await fetch(`${API_BASE}/api/matches/${matchId}/shooters/${registrationId}/stage-summaries`, { headers: authHeaders() });
     if (!res.ok) throw new Error(`Failed to fetch stage summaries: ${res.statusText}`);

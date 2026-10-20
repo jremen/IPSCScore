@@ -101,6 +101,37 @@ resultsRoutes.get('/matches/:matchId/results/overall', async (c) => {
   return c.json({ results: ranked, dq: dqRanked });
 });
 
+// Match progress summary — aggregate counts only.
+//
+// The TV kiosk is an unauthenticated public view but needs a completion
+// percentage, which normally comes from the protected `scoring-progress`
+// endpoint. This returns only counts (no registration or stage identifiers),
+// so it is safe to expose alongside the other public results reads.
+resultsRoutes.get('/matches/:matchId/results/progress', async (c) => {
+  const matchId = c.req.param('matchId');
+
+  const [row] = await sql`
+    SELECT
+      (SELECT COUNT(*) FROM match_registrations
+        WHERE match_id = ${matchId} AND is_dq = FALSE) AS registrations_length,
+      (SELECT COUNT(*) FROM stages WHERE match_id = ${matchId}) AS stages_length,
+      (SELECT COUNT(DISTINCT ss.stage_id || ':' || ss.registration_id)
+         FROM stage_scores ss
+         JOIN match_registrations mr ON mr.id = ss.registration_id
+        WHERE ss.match_id = ${matchId} AND mr.is_dq = FALSE) AS scored_length
+  `;
+
+  const registrationsLength = Number(row?.registrations_length ?? 0);
+  const stagesLength = Number(row?.stages_length ?? 0);
+  const scoredLength = Number(row?.scored_length ?? 0);
+  const full = stagesLength * registrationsLength;
+  const progressValue = full > 0
+    ? Math.min(100, Math.round((scoredLength / full) * 10000) / 100)
+    : 0;
+
+  return c.json({ scoredLength, stagesLength, registrationsLength, progressValue });
+});
+
 // Results by division — per-division rankings with positions and match_percent
 resultsRoutes.get('/matches/:matchId/results/divisions', async (c) => {
   const matchId = c.req.param('matchId');

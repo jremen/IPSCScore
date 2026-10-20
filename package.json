@@ -1,6 +1,6 @@
 {
   "name": "ipscscore",
-  "version": "2.5.4",
+  "version": "2.6.0",
   "private": true,
   "description": "IPSC/USPSA scoring application",
   "workspaces": [
@@ -25,8 +25,12 @@
     "build:all": "npm run build:backend && npm run build:frontend && cd electron && npm run build:all",
     "build:android:debug": "cd mobile && npm run build:android:debug",
     "build:android:release": "cd mobile && npm run build:android:release",
-    "sync:android": "cd mobile && npm run sync",
+    "build:ios:simulator": "cd mobile && npm run build:ios:simulator",
+    "sync:android": "cd mobile && npm run sync:android",
+    "sync:ios": "cd mobile && npm run sync:ios",
     "open:android": "cd mobile && npm run open",
+    "open:ios": "cd mobile && npm run open:ios",
+    "run:ios": "cd mobile && npm run run:ios",
     "clean:build": "rm -rf frontend/dist backend/dist electron/dist electron/dist-backend electron/frontend-dist-bundled dist-electron",
     "version:patch": "node scripts/version-bump.mjs patch",
     "version:minor": "node scripts/version-bump.mjs minor",

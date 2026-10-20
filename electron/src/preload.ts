@@ -23,4 +23,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Folder picker for local backup
   pickBackupFolder: () => ipcRenderer.invoke('pick-backup-folder') as Promise<string | null>,
+
+  // Power management (keep the host computer awake).
+  getPreventSleep: () => ipcRenderer.invoke('get-prevent-sleep') as Promise<boolean>,
+  setPreventSleep: (enabled: boolean) => ipcRenderer.invoke('set-prevent-sleep', enabled) as Promise<boolean>,
 });

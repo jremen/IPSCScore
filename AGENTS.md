@@ -24,7 +24,7 @@ Use a stable `agent_id` of the form `<project>-<role>` (e.g. `myapp-backend`). S
 | Frontend code (React, hooks, components, i18n) | `ipscscore-frontend` | design decisions, component patterns, UI quirks |
 | Backend code (Express, database, API) | `ipscscore-backend` | query patterns, migration gotchas |
 | Electron shell | `ipscscore-electron` | packaging, IPC |
-| Android / Capacitor shell + local SQLite layer | `ipscscore-android` | Capacitor config, SQLite dialect gaps, offline data layer |
+| Android / iOS / Capacitor shell + local SQLite layer | `ipscscore-android` | Capacitor config, SQLite dialect gaps, offline data layer |
 | Shared domain layer (`packages/core`) | `__shared__` | scoring formulas, domain types, cross-platform invariants |
 | Cross-cutting (Docker, CI, repo layout, conventions) | `__shared__` | git workflow, shared tooling |
 
@@ -107,7 +107,7 @@ All `package.json` files in this monorepo MUST share the same version:
 - `backend/package.json`
 - `electron/package.json` — source of truth, read by `electron-builder` and `app.getVersion()` in `electron/src/menu.ts:25`
 - `packages/core/package.json` — shared domain layer
-- `mobile/package.json` — Capacitor Android shell
+- `mobile/package.json` — Capacitor Android + iOS shell
 
 `electron/dist-backend/package.json` is build output and is **not** versioned.
 `scripts/version-bump.mjs` edits every entry in its `FILES` array — add new workspace manifests there.

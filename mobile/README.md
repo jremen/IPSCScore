@@ -7,6 +7,7 @@ No backend, no computer, and no network are required at runtime.
 - Architecture and design notes: [`../docs/android.md`](../docs/android.md)
 - What works and what is not implemented yet on Android: [Feature coverage](#feature-coverage)
 - How releases are published (CI, signing secrets): [`../docs/releasing.md`](../docs/releasing.md)
+- iOS build & device-install guide: [`README-ios.md`](README-ios.md)
 
 ---
 

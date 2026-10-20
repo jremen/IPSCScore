@@ -1,11 +1,12 @@
 /**
  * Runtime platform detection.
  *
- * The same Vite bundle runs in three very different places:
+ * The same Vite bundle runs in four very different places:
  *
  *   web      — browser talking to a remote HTTP/PostgreSQL backend
  *   electron — desktop shell, same HTTP backend started as a child process
  *   android  — Capacitor shell, fully local SQLite, no backend at all
+ *   ios      — Capacitor shell, same on-device SQLite data layer as Android
  *
  * Detection deliberately avoids a static `@capacitor/core` import so the web
  * bundle stays lean; Capacitor injects `window.Capacitor` on native platforms.

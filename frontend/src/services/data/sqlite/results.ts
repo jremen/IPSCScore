@@ -289,6 +289,32 @@ function groupedWithPositions(rows: ResultRow[]) {
 
 // ── Public queries ───────────────────────────────────────────────────────
 
+export async function matchProgress(matchId: string) {
+  const [registrations, scores, stages] = await Promise.all([
+    loadRegistrations(matchId),
+    loadScores(matchId),
+    all<{ id: string }>(`SELECT id FROM stages WHERE match_id = ?`, [matchId]),
+  ]);
+
+  const nonDqIds = new Set(registrations.filter((r) => r.is_dq !== 1).map((r) => r.id));
+  const scoredPairs = new Set<string>();
+  for (const score of scores) {
+    if (nonDqIds.has(score.registration_id)) {
+      scoredPairs.add(`${score.stage_id}:${score.registration_id}`);
+    }
+  }
+
+  const scoredLength = scoredPairs.size;
+  const stagesLength = stages.length;
+  const registrationsLength = nonDqIds.size;
+  const full = stagesLength * registrationsLength;
+  const progressValue = full > 0
+    ? Math.min(100, round((scoredLength / full) * 100, 2))
+    : 0;
+
+  return { scoredLength, stagesLength, registrationsLength, progressValue };
+}
+
 export async function overallResults(matchId: string) {
   const { active, dq } = await loadContext(matchId);
   return { results: withPositions(active), dq: dqRows(dq) };

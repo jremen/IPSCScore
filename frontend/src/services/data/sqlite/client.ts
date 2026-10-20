@@ -147,6 +147,7 @@ export function createLocalClient() {
       Results.singleStageResults(matchId, stageId),
     getCategoryResults: (matchId: string) => Results.categoryResults(matchId),
     getTagResults: (matchId: string) => Results.tagResults(matchId),
+    getPublicMatchProgress: (matchId: string) => Results.matchProgress(matchId),
     getShooterStageSummaries: (matchId: string, registrationId: string) =>
       Results.shooterStageSummaries(matchId, registrationId),
     exportRegistrationCSV: async () => unavailable('Registration CSV export'),

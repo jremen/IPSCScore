@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { api } from '../services/api';
 import { isBackendReachable, isNetworkError } from '../services/connectivity';
 import { saveAuthSession, getAuthSession, clearAuthSession } from '../services/offlineDB';
+import { isLocalRuntime } from '../services/data/platform';
 import { generateDeviceId } from '../utils/deviceId';
 
 interface AuthState {
@@ -400,6 +401,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           return;
         }
       }
+    }
+
+    // Standalone Android/iOS builds have no backend and no remote scorer
+    // session. Falling through to autoLogin would replace the admin login
+    // screen with a misleading "scan the QR code" error on every cold start.
+    if (isLocalRuntime()) {
+      get().checkLocalNetwork();
+      return;
     }
 
     // localStorage empty — try IDB fallback (iOS PWA may have wiped localStorage)

@@ -135,6 +135,10 @@ length of the run only.
   Store upload. `versionCode` is derived from the version
   (`major * 10000 + minor * 100 + patch`) so it stays monotonic; a Play Store
   release would need an AAB and a Play service account.
+- **iOS is not built in CI.** It is not distributed through the App Store, so there
+  is nothing to publish from GitHub Actions: builds are made and signed locally in
+  Xcode. See [`../mobile/README-ios.md`](../mobile/README-ios.md). The same version
+  scheme is written into the Xcode project by `scripts/sync-ios-version.mjs`.
 - Blockmap files are **not** attached; there is no auto-updater to consume them.
 - The workflow builds **only** what the plan covers: no Linux arm64 AppImage, no
   macOS x64, no Windows ARM64 native PostgreSQL (Windows arm64 uses the x64
