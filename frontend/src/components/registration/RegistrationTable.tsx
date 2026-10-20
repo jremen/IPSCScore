@@ -18,6 +18,8 @@ interface RegistrationTableProps {
   onRemove: (regId: string) => void;
   onUngroup: (regId: string) => void;
   onDragToGroup: (sourceId: string, targetId: string) => void;
+  /** Hide division badges for sports that do not use divisions (archery). */
+  showDivision?: boolean;
 }
 
 function GripHandle({ registration }: { registration: RegistrationWithShooter }) {
@@ -48,6 +50,7 @@ function RegistrationRow({
   onEdit,
   onRemove,
   onUngroup,
+  showDivision,
 }: {
   r: any;
   idx: number;
@@ -55,6 +58,7 @@ function RegistrationRow({
   onEdit: (r: any) => void;
   onRemove: (regId: string) => void;
   onUngroup: (regId: string) => void;
+  showDivision: boolean;
 }) {
   const { t } = useTranslation();
   const { categoryLabel, powerFactorLabel } = useConstLabels();
@@ -81,9 +85,11 @@ function RegistrationRow({
       <TableCell className="font-medium dark:text-white whitespace-nowrap">
         {r.first_name} {r.last_name}
       </TableCell>
-      <TableCell>
-        <Badge color="blue" size="xs">{divisionLabel(r.effective_division)}</Badge>
-      </TableCell>
+      {showDivision && (
+        <TableCell>
+          <Badge color="blue" size="xs">{divisionLabel(r.effective_division)}</Badge>
+        </TableCell>
+      )}
       <TableCell>
         <Badge color="gray" size="xs">{categoryLabel(r.effective_category)}</Badge>
       </TableCell>
@@ -124,7 +130,7 @@ function RegistrationRow({
   );
 }
 
-export default function RegistrationTable({ registrations, totalCount, selection, onEdit, onRemove, onUngroup, onDragToGroup }: RegistrationTableProps) {
+export default function RegistrationTable({ registrations, totalCount, selection, onEdit, onRemove, onUngroup, onDragToGroup, showDivision = true }: RegistrationTableProps) {
   const { t } = useTranslation();
   const [activeRegistration, setActiveRegistration] = useState<RegistrationWithShooter | null>(null);
 
@@ -176,7 +182,7 @@ export default function RegistrationTable({ registrations, totalCount, selection
               </TableHeadCell>
               <TableHeadCell className="w-2!">#</TableHeadCell>
               <TableHeadCell>{t('common.name')}</TableHeadCell>
-              <TableHeadCell>{t('shooters.division')}</TableHeadCell>
+              {showDivision && <TableHeadCell>{t('shooters.division')}</TableHeadCell>}
               <TableHeadCell>{t('shooters.category')}</TableHeadCell>
               <TableHeadCell>PF</TableHeadCell>
               <TableHeadCell>{t('registration.squad')}</TableHeadCell>
@@ -195,6 +201,7 @@ export default function RegistrationTable({ registrations, totalCount, selection
                 onEdit={onEdit}
                 onRemove={onRemove}
                 onUngroup={onUngroup}
+                showDivision={showDivision}
               />
             ))}
           </TableBody>
@@ -206,9 +213,11 @@ export default function RegistrationTable({ registrations, totalCount, selection
               <div className="font-medium text-sm dark:text-white">
                 {activeRegistration.first_name} {activeRegistration.last_name}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {divisionLabel(activeRegistration.effective_division)}
-              </div>
+              {showDivision && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {divisionLabel(activeRegistration.effective_division)}
+                </div>
+              )}
             </div>
           )}
         </DragOverlay>

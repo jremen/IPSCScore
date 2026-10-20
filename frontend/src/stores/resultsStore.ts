@@ -22,7 +22,8 @@ function normalizeNumericFields<T extends Record<string, any>>(row: T): T {
       key === 'position' || key === 'division_position' ||
       key === 'alpha' || key === 'charlie' || key === 'delta' ||
       key === 'miss' || key === 'no_shoot' || key === 'total_time' ||
-      key === 'procedurals' || key === 'procedural_count'
+      key === 'procedurals' || key === 'procedural_count' ||
+      key === 'achieved_points' || key === 'hits' || key === 'misses'
     ) {
       out[key] = num(out[key]);
     }

@@ -27,6 +27,7 @@ export default function PublicResultsKioskView() {
     divisionKeys,
     activeDivision,
     divisionIndex,
+    divisionApplies,
     rows,
     dqRows,
     columns,
@@ -64,7 +65,9 @@ export default function PublicResultsKioskView() {
           <h1 className="truncate text-4xl font-bold tracking-tight text-white">
             🏆 {matchName || t('results.publicTitle')}
           </h1>
-          <p className="text-xl text-slate-400">{t('results.kioskSubtitle')}</p>
+          <p className="text-xl text-slate-400">
+            {divisionApplies ? t('results.kioskSubtitle') : t('results.title')}
+          </p>
         </div>
         <div className="mx-auto">
           <MatchProgress size="xl" width="w-80" variant="kiosk" progressValue={progressValue} />
@@ -84,10 +87,14 @@ export default function PublicResultsKioskView() {
         {activeDivision ? (
           <>
             <div className="flex shrink-0 items-end justify-between gap-6 px-10 pb-3 pt-6">
-              <h2 className="text-5xl font-bold text-white">{divisionLabel(activeDivision)}</h2>
-              <span className="text-2xl font-medium text-slate-500">
-                {divisionIndex + 1} / {divisionKeys.length}
-              </span>
+              <h2 className="text-5xl font-bold text-white">
+                {divisionApplies ? divisionLabel(activeDivision) : t('results.allShooters')}
+              </h2>
+              {divisionApplies && (
+                <span className="text-2xl font-medium text-slate-500">
+                  {divisionIndex + 1} / {divisionKeys.length}
+                </span>
+              )}
             </div>
 
             <div ref={setViewportEl} className="kiosk-viewport min-h-0 flex-1 overflow-hidden px-10">

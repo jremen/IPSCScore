@@ -1,5 +1,17 @@
 import { Hono } from 'hono';
 import { sql } from '../db/client.js';
+import {
+  matchHasDivisions,
+  resolveDivisionForMatch,
+  type MatchDivisionContext,
+} from '../utils/matchDivisions.js';
+import {
+  buildScoringMeta,
+  parseJsonValue,
+  stageScoringProfile,
+  type MatchScoringMeta,
+  type ResultsProfile,
+} from '../utils/resultsScoring.js';
 
 export const resultsRoutes = new Hono();
 
@@ -13,6 +25,7 @@ const MATCH_TOTALS_CTE = `
       SELECT
         ss.registration_id,
         SUM(ss.stage_points) as match_points,
+        SUM(ss.net_points) as achieved_points,
         SUM(ss.procedural_count) as procedurals,
         SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time,
         SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.net_points ELSE 0 END) as hf_net_points,
@@ -53,6 +66,7 @@ function matchCte(isDq: boolean) {
       mr.is_dq,
       ${isDq ? 'mr.dq_reason,' : ''}
       COALESCE(st.match_points, 0) as match_points,
+      COALESCE(st.achieved_points, 0) as achieved_points,
       ${MATCH_HF_COLUMN}
       COALESCE(st.total_time, 0) as time,
       COALESCE(tt.alpha, 0) as alpha,
@@ -76,27 +90,213 @@ async function runMatchQuery(matchId: string, isDq: boolean) {
   return sql.unsafe(query.replace(/\$1/g, `'${matchId}'`) + '\n' + order);
 }
 
+// ── Scoring-display context ─────────────────────────────────────────
+interface BreakdownEntry {
+  ring_counts: Record<string, number>;
+  hits: number;
+  misses: number;
+}
+
+interface MatchContext {
+  match: MatchDivisionContext;
+  meta: MatchScoringMeta;
+  breakdown: Map<string, BreakdownEntry>;
+  divisionApplies: boolean;
+}
+
+interface MatchDivisionInfo {
+  match: MatchDivisionContext;
+  divisionApplies: boolean;
+}
+
+function emptyBreakdown(): BreakdownEntry {
+  return { ring_counts: {}, hits: 0, misses: 0 };
+}
+
+function addRingValue(entry: BreakdownEntry, value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return;
+  const key = String(numeric);
+  entry.ring_counts[key] = (entry.ring_counts[key] ?? 0) + 1;
+}
+
+/** Ring counts and hit/miss totals for every registration in the match. */
+async function loadMatchBreakdown(matchId: string): Promise<Map<string, BreakdownEntry>> {
+  const breakdown = new Map<string, BreakdownEntry>();
+  const entryFor = (registrationId: string) => {
+    let entry = breakdown.get(registrationId);
+    if (!entry) {
+      entry = emptyBreakdown();
+      breakdown.set(registrationId, entry);
+    }
+    return entry;
+  };
+
+  const scoreRows = await sql`
+    SELECT ss.registration_id, st.scoring_type, st.config, ss.score_data
+    FROM stage_scores ss
+    JOIN stages st ON st.id = ss.stage_id
+    WHERE ss.match_id = ${matchId}
+  `;
+
+  for (const row of scoreRows as any[]) {
+    if (stageScoringProfile(row.scoring_type, row.config) !== 'ring') continue;
+    const scoreData = parseJsonValue(row.score_data);
+    const ringValues = Array.isArray(scoreData?.ring_values) ? scoreData.ring_values : [];
+    const entry = entryFor(row.registration_id);
+    for (const value of ringValues) addRingValue(entry, value);
+  }
+
+  const targetRows = await sql`
+    SELECT ss.registration_id, st.scoring_type, st.config, ts.target_data
+    FROM stage_scores ss
+    JOIN stages st ON st.id = ss.stage_id
+    JOIN target_scores ts ON ts.stage_score_id = ss.id
+    WHERE ss.match_id = ${matchId}
+  `;
+
+  for (const row of targetRows as any[]) {
+    if (stageScoringProfile(row.scoring_type, row.config) !== 'hit_count') continue;
+    const targetData = parseJsonValue(row.target_data);
+    const entry = entryFor(row.registration_id);
+    if (targetData?.hit === true) entry.hits += 1;
+    else entry.misses += 1;
+  }
+
+  return breakdown;
+}
+
+/** Ring counts and hit/miss totals for one stage. */
+async function loadStageBreakdown(stageId: string): Promise<Map<string, BreakdownEntry>> {
+  const breakdown = new Map<string, BreakdownEntry>();
+  const entryFor = (registrationId: string) => {
+    let entry = breakdown.get(registrationId);
+    if (!entry) {
+      entry = emptyBreakdown();
+      breakdown.set(registrationId, entry);
+    }
+    return entry;
+  };
+
+  const scoreRows = await sql`
+    SELECT ss.registration_id, st.scoring_type, st.config, ss.score_data
+    FROM stage_scores ss
+    JOIN stages st ON st.id = ss.stage_id
+    WHERE ss.stage_id = ${stageId}
+  `;
+
+  for (const row of scoreRows as any[]) {
+    if (stageScoringProfile(row.scoring_type, row.config) !== 'ring') continue;
+    const scoreData = parseJsonValue(row.score_data);
+    const ringValues = Array.isArray(scoreData?.ring_values) ? scoreData.ring_values : [];
+    const entry = entryFor(row.registration_id);
+    for (const value of ringValues) addRingValue(entry, value);
+  }
+
+  const targetRows = await sql`
+    SELECT ss.registration_id, st.scoring_type, st.config, ts.target_data
+    FROM stage_scores ss
+    JOIN stages st ON st.id = ss.stage_id
+    JOIN target_scores ts ON ts.stage_score_id = ss.id
+    WHERE ss.stage_id = ${stageId}
+  `;
+
+  for (const row of targetRows as any[]) {
+    if (stageScoringProfile(row.scoring_type, row.config) !== 'hit_count') continue;
+    const targetData = parseJsonValue(row.target_data);
+    const entry = entryFor(row.registration_id);
+    if (targetData?.hit === true) entry.hits += 1;
+    else entry.misses += 1;
+  }
+
+  return breakdown;
+}
+
+async function loadMatchDivisionInfo(matchId: string): Promise<MatchDivisionInfo> {
+  const [match] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
+  const matchContext: MatchDivisionContext = match ?? {};
+  return {
+    match: matchContext,
+    divisionApplies: matchHasDivisions(matchContext),
+  };
+}
+
+async function loadMatchContext(matchId: string): Promise<MatchContext> {
+  const divisionInfo = await loadMatchDivisionInfo(matchId);
+  const stageRows = await sql`SELECT scoring_type, config FROM stages WHERE match_id = ${matchId}`;
+  return {
+    ...divisionInfo,
+    meta: buildScoringMeta(stageRows as any),
+    breakdown: await loadMatchBreakdown(matchId),
+  };
+}
+
+function decorateMatchRow(row: any, context: MatchContext) {
+  const entry = context.breakdown.get(row.registration_id);
+  const profile = context.meta.profile;
+  const achievedPoints = Number(row.achieved_points ?? 0);
+  const matchPoints = profile === 'zone' ? Number(row.match_points ?? 0) : achievedPoints;
+
+  return {
+    ...row,
+    division: resolveDivisionForMatch(context.match, row.division) ?? '',
+    division_applies: context.divisionApplies,
+    scoring_profile: profile,
+    ring_values: profile === 'ring' ? context.meta.ring_values : null,
+    ring_counts: profile === 'ring' ? (entry?.ring_counts ?? {}) : null,
+    hits: profile === 'hit_count' ? (entry?.hits ?? 0) : null,
+    misses: profile === 'hit_count' ? (entry?.misses ?? 0) : null,
+    achieved_points: achievedPoints,
+    match_points: matchPoints,
+    hit_factor: row.hit_factor != null ? Number(row.hit_factor) : null,
+    match_percent: 0,
+    position: 0,
+  };
+}
+
+function prepareMatchRows(rows: any[], context: MatchContext, isDq: boolean) {
+  const decorated = rows.map((row) => decorateMatchRow(row, context));
+  if (!isDq) {
+    // Non-zone profiles rank by achieved points, not by the stored
+    // division-relative stage points.
+    decorated.sort((a, b) => b.match_points - a.match_points);
+  }
+  return decorated;
+}
+
+function rankGroup(rows: any[]) {
+  const highest = rows.length > 0 ? Number(rows[0].match_points) : 0;
+  return rows.map((row, index) => ({
+    ...row,
+    position: index + 1,
+    match_percent: highest > 0 ? Math.round((Number(row.match_points) / highest) * 10000) / 100 : 0,
+  }));
+}
+
+function groupAndRank(rows: any[], divisionApplies: boolean) {
+  const groups: Record<string, any[]> = {};
+  for (const row of rows) {
+    const division = divisionApplies ? (row.division || 'unknown') : 'all';
+    if (!groups[division]) groups[division] = [];
+    groups[division].push(row);
+  }
+  const result: Record<string, any[]> = {};
+  for (const [division, group] of Object.entries(groups)) {
+    result[division] = rankGroup(group);
+  }
+  return result;
+}
+
 // Overall results (cross-division)
 resultsRoutes.get('/matches/:matchId/results/overall', async (c) => {
   const matchId = c.req.param('matchId');
+  const context = await loadMatchContext(matchId);
 
   const results = await runMatchQuery(matchId, false);
-  const highestPoints = results.length > 0 ? Number(results[0].match_points) : 0;
-
-  const ranked = results.map((r: any, i: number) => ({
-    ...r,
-    position: i + 1,
-    match_points: Number(r.match_points),
-    hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
-    match_percent: highestPoints > 0 ? Math.round((Number(r.match_points) / highestPoints) * 10000) / 100 : 0,
-  }));
+  const ranked = rankGroup(prepareMatchRows(results, context, false));
 
   const dq = await runMatchQuery(matchId, true);
-  const dqRanked = dq.map((r: any) => ({
-    ...r,
-    match_points: Number(r.match_points),
-    match_percent: 0,
-  }));
+  const dqRanked = prepareMatchRows(dq, context, true);
 
   return c.json({ results: ranked, dq: dqRanked });
 });
@@ -135,48 +335,112 @@ resultsRoutes.get('/matches/:matchId/results/progress', async (c) => {
 // Results by division — per-division rankings with positions and match_percent
 resultsRoutes.get('/matches/:matchId/results/divisions', async (c) => {
   const matchId = c.req.param('matchId');
+  const context = await loadMatchContext(matchId);
 
   const results = await runMatchQuery(matchId, false);
-
-  const divisionResults: Record<string, any[]> = {};
-  const divisionGroups: Record<string, any[]> = {};
-
-  for (const r of results) {
-    const div = r.division || 'unknown';
-    if (!divisionGroups[div]) divisionGroups[div] = [];
-    divisionGroups[div].push(r);
-  }
-
-  for (const [division, shooters] of Object.entries(divisionGroups)) {
-    const highestPoints = shooters.length > 0 ? Number(shooters[0].match_points) : 0;
-
-    divisionResults[division] = shooters.map((r: any, i: number) => ({
-      ...r,
-      position: i + 1,
-      match_points: Number(r.match_points),
-      hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
-      match_percent: highestPoints > 0 ? Math.round((Number(r.match_points) / highestPoints) * 10000) / 100 : 0,
-    }));
-  }
+  const divisionResults = groupAndRank(
+    prepareMatchRows(results, context, false),
+    context.divisionApplies,
+  );
 
   const dq = await runMatchQuery(matchId, true);
-  const dqRanked = dq.map((r: any) => ({
-    ...r,
-    match_points: Number(r.match_points),
-    match_percent: 0,
-  }));
+  const dqRanked = prepareMatchRows(dq, context, true);
 
   return c.json({ ...divisionResults, dq: dqRanked });
 });
 
+interface StageScoringContext {
+  meta: MatchScoringMeta;
+  breakdown: Map<string, BreakdownEntry>;
+}
+
+async function stageScoringContext(stage: any): Promise<StageScoringContext> {
+  return {
+    meta: buildScoringMeta([{ scoring_type: stage.scoring_type, config: stage.config }]),
+    breakdown: await loadStageBreakdown(stage.id),
+  };
+}
+
+function decorateStageRow(
+  row: any,
+  stageContext: StageScoringContext,
+  matchContext: MatchDivisionInfo,
+) {
+  const entry = stageContext.breakdown.get(row.registration_id);
+  const profile = stageContext.meta.profile;
+  return {
+    ...row,
+    division: resolveDivisionForMatch(matchContext.match, row.division) ?? '',
+    division_applies: matchContext.divisionApplies,
+    scoring_profile: profile,
+    ring_values: profile === 'ring' ? stageContext.meta.ring_values : null,
+    ring_counts: profile === 'ring' ? (entry?.ring_counts ?? {}) : null,
+    hits: profile === 'hit_count' ? (entry?.hits ?? 0) : null,
+    misses: profile === 'hit_count' ? (entry?.misses ?? 0) : null,
+    achieved_points: Number(row.net_points ?? 0),
+    hit_factor: row.hit_factor != null ? Number(row.hit_factor) : 0,
+    net_points: Number(row.net_points ?? 0),
+    stage_percent: Number(row.stage_percent ?? 0),
+    stage_points: profile === 'zone' ? Number(row.stage_points ?? 0) : Number(row.net_points ?? 0),
+    time: row.time != null ? Number(row.time) : null,
+    procedural_count: Number(row.procedural_count ?? 0),
+    position: 0,
+    division_position: 0,
+  };
+}
+
+function rankStageRows(rows: any[], profile: ResultsProfile, divisionApplies: boolean) {
+  const groups: Record<string, any[]> = {};
+  for (const row of rows) {
+    const division = divisionApplies ? (row.division || 'unknown') : 'all';
+    if (!groups[division]) groups[division] = [];
+    groups[division].push(row);
+  }
+
+  const grouped: Record<string, any[]> = {};
+  for (const [division, group] of Object.entries(groups)) {
+    const sorted = [...group].sort((a, b) => (
+      profile === 'zone' ? b.stage_points - a.stage_points : b.net_points - a.net_points
+    ));
+    const best = profile === 'zone'
+      ? sorted[0]?.stage_points ?? 0
+      : sorted[0]?.net_points ?? 0;
+
+    grouped[division] = sorted.map((row, index) => ({
+      ...row,
+      position: index + 1,
+      division_position: index + 1,
+      stage_percent: profile === 'zone'
+        ? row.stage_percent
+        : (best > 0 ? Math.round((row.net_points / best) * 10000) / 100 : 0),
+    }));
+  }
+
+  // The flat list carries the overall stage position; the grouped rows keep
+  // their per-division position for the division sub-tables.
+  const flat = Object.values(grouped).flat().map((row) => ({ ...row }));
+  flat.sort((a, b) => (
+    profile === 'zone' ? b.stage_points - a.stage_points : b.net_points - a.net_points
+  ));
+  flat.forEach((row, index) => { row.position = index + 1; });
+
+  return { grouped, flat };
+}
+
 // Per-stage results (grouped by division within each stage)
 resultsRoutes.get('/matches/:matchId/results/stages', async (c) => {
   const matchId = c.req.param('matchId');
+  const matchContext = await loadMatchDivisionInfo(matchId);
 
-  const stages = await sql`SELECT id, stage_number, name FROM stages WHERE match_id = ${matchId} ORDER BY stage_number`;
+  const stages = await sql`
+    SELECT id, stage_number, name, scoring_type, config
+    FROM stages WHERE match_id = ${matchId} ORDER BY stage_number
+  `;
   const stageResults = [];
 
-  for (const stage of stages) {
+  for (const stage of stages as any[]) {
+    const stageContext = await stageScoringContext(stage);
+
     const scores = await sql`
       SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time, ss.procedural_count,
              s.first_name, s.last_name,
@@ -197,38 +461,11 @@ resultsRoutes.get('/matches/:matchId/results/stages', async (c) => {
       ORDER BY division, ss.stage_points DESC
     `;
 
-    const normalizedScores = scores.map((s: any) => ({
-      ...s,
-      hit_factor: Number(s.hit_factor),
-      net_points: Number(s.net_points),
-      stage_percent: Number(s.stage_percent),
-      stage_points: Number(s.stage_points),
-      time: s.time != null ? Number(s.time) : null,
-    }));
-
-    const divisionGroups: Record<string, any[]> = {};
-    for (const s of normalizedScores) {
-      const div = s.division || 'unknown';
-      if (!divisionGroups[div]) divisionGroups[div] = [];
-      divisionGroups[div].push(s);
-    }
-
-    const groupedScores: any[] = [];
-    for (const [division, divScores] of Object.entries(divisionGroups)) {
-      divScores.forEach((s: any, i: number) => {
-        groupedScores.push({
-          ...s,
-          position: i + 1,
-          division_position: i + 1,
-        });
-      });
-    }
-
-    groupedScores.sort((a, b) => b.stage_points - a.stage_points);
-    groupedScores.forEach((s, i) => { s.position = i + 1; });
+    const normalizedScores = (scores as any[]).map((s) => decorateStageRow(s, stageContext, matchContext));
+    const ranked = rankStageRows(normalizedScores, stageContext.meta.profile, matchContext.divisionApplies);
 
     const dqScores = await sql`
-      SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.time, ss.procedural_count,
+      SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time, ss.procedural_count,
              s.first_name, s.last_name,
              COALESCE(mr.division, s.division) as division,
              mr.is_dq, mr.dq_reason,
@@ -242,7 +479,7 @@ resultsRoutes.get('/matches/:matchId/results/stages', async (c) => {
       JOIN shooters s ON s.id = mr.shooter_id
       LEFT JOIN target_scores ts ON ts.stage_score_id = ss.id
       WHERE ss.stage_id = ${stage.id} AND mr.is_dq = TRUE
-      GROUP BY ss.id, ss.registration_id, ss.hit_factor, ss.net_points, ss.time, ss.procedural_count,
+      GROUP BY ss.id, ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time, ss.procedural_count,
                s.first_name, s.last_name, s.division, mr.division, mr.is_dq, mr.dq_reason
       ORDER BY s.last_name, s.first_name
     `;
@@ -251,23 +488,12 @@ resultsRoutes.get('/matches/:matchId/results/stages', async (c) => {
       stage_id: stage.id,
       stage_number: stage.stage_number,
       stage_name: stage.name,
-      scores: groupedScores,
-      dq_scores: dqScores.map((s: any) => ({
-        ...s,
-        hit_factor: Number(s.hit_factor),
-        net_points: Number(s.net_points),
-        time: Number(s.time),
-        procedural_count: Number(s.procedural_count),
-      })),
-      divisions: Object.fromEntries(
-        Object.entries(divisionGroups).map(([div, divScores]) => [
-          div,
-          divScores.map((s: any, i: number) => ({
-            ...s,
-            position: i + 1,
-          })),
-        ])
-      ),
+      scoring_profile: stageContext.meta.profile,
+      ring_values: stageContext.meta.ring_values,
+      division_applies: matchContext.divisionApplies,
+      scores: ranked.flat,
+      dq_scores: (dqScores as any[]).map((s) => decorateStageRow(s, stageContext, matchContext)),
+      divisions: ranked.grouped,
     });
   }
 
@@ -277,6 +503,14 @@ resultsRoutes.get('/matches/:matchId/results/stages', async (c) => {
 // Single stage results
 resultsRoutes.get('/matches/:matchId/results/stages/:stageId', async (c) => {
   const { matchId, stageId } = c.req.param();
+  const matchContext = await loadMatchDivisionInfo(matchId);
+
+  const [stage] = await sql`
+    SELECT id, scoring_type, config FROM stages WHERE id = ${stageId} AND match_id = ${matchId}
+  `;
+  if (!stage) return c.json({ error: 'Stage not found' }, 404);
+
+  const stageContext = await stageScoringContext(stage);
 
   const scores = await sql`
     SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time,
@@ -292,7 +526,7 @@ resultsRoutes.get('/matches/:matchId/results/stages/:stageId', async (c) => {
   `;
 
   const dqScores = await sql`
-    SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.time,
+    SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time,
            s.first_name, s.last_name,
            COALESCE(mr.division, s.division) as division,
            COALESCE(mr.category, s.category) as category,
@@ -304,28 +538,22 @@ resultsRoutes.get('/matches/:matchId/results/stages/:stageId', async (c) => {
     ORDER BY s.last_name, s.first_name
   `;
 
+  const normalized = (scores as any[]).map((s) => decorateStageRow(s, stageContext, matchContext));
+  const ranked = rankStageRows(normalized, stageContext.meta.profile, matchContext.divisionApplies);
+
   return c.json({
-    results: scores.map((s: any, i: number) => ({
-      ...s,
-      position: i + 1,
-      hit_factor: Number(s.hit_factor),
-      net_points: Number(s.net_points),
-      stage_percent: Number(s.stage_percent),
-      stage_points: Number(s.stage_points),
-      time: s.time !== null && s.time !== undefined ? Number(s.time) : null,
-    })),
-    dq: dqScores.map((s: any) => ({
-      ...s,
-      hit_factor: Number(s.hit_factor),
-      net_points: Number(s.net_points),
-      time: Number(s.time),
-    })),
+    scoring_profile: stageContext.meta.profile,
+    ring_values: stageContext.meta.ring_values,
+    division_applies: matchContext.divisionApplies,
+    results: ranked.flat,
+    dq: (dqScores as any[]).map((s) => decorateStageRow(s, stageContext, matchContext)),
   });
 });
 
 // Results by category (grouped by division within each category)
 resultsRoutes.get('/matches/:matchId/results/categories', async (c) => {
   const matchId = c.req.param('matchId');
+  const context = await loadMatchContext(matchId);
 
   const categories = ['regular', 'junior', 'senior', 'super_senior', 'lady'];
   const categoryResults: Record<string, Record<string, any[]>> = {};
@@ -339,6 +567,7 @@ resultsRoutes.get('/matches/:matchId/results/categories', async (c) => {
         COALESCE(mr.division, s.division) as division,
         COALESCE(mr.power_factor, s.power_factor) as power_factor,
         COALESCE(st.match_points, 0) as match_points,
+        COALESCE(st.achieved_points, 0) as achieved_points,
         ${MATCH_HF_COLUMN}
         COALESCE(st.total_time, 0) as time,
         COALESCE(tt.alpha, 0) as alpha,
@@ -357,33 +586,15 @@ resultsRoutes.get('/matches/:matchId/results/categories', async (c) => {
     const results = await sql.unsafe(query.replace(/\$1/g, `'${matchId}'`).replace(/\$2/g, `'${cat}'`));
 
     if (results.length > 0) {
-      const byDivision: Record<string, any[]> = {};
-      for (const r of results) {
-        const div = r.division || 'unknown';
-        if (!byDivision[div]) byDivision[div] = [];
-        byDivision[div].push(r);
-      }
-
-      categoryResults[cat] = {};
-      for (const [div, divResults] of Object.entries(byDivision)) {
-        const highest = Number(divResults[0].match_points);
-        categoryResults[cat][div] = divResults.map((r: any, i: number) => ({
-          ...r,
-          position: i + 1,
-          match_points: Number(r.match_points),
-          hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
-          match_percent: highest > 0 ? Math.round((Number(r.match_points) / highest) * 10000) / 100 : 0,
-        }));
-      }
+      categoryResults[cat] = groupAndRank(
+        prepareMatchRows(results as any[], context, false),
+        context.divisionApplies,
+      );
     }
   }
 
   const dq = await runMatchQuery(matchId, true);
-  const dqRanked = dq.map((r: any) => ({
-    ...r,
-    match_points: Number(r.match_points),
-    match_percent: 0,
-  }));
+  const dqRanked = prepareMatchRows(dq, context, true);
 
   return c.json({ ...categoryResults, dq: dqRanked });
 });
@@ -391,6 +602,7 @@ resultsRoutes.get('/matches/:matchId/results/categories', async (c) => {
 // Results by tag (grouped by division within each tag)
 resultsRoutes.get('/matches/:matchId/results/tags', async (c) => {
   const matchId = c.req.param('matchId');
+  const context = await loadMatchContext(matchId);
 
   const tags = await sql`
     SELECT DISTINCT s.tag FROM match_registrations mr
@@ -401,7 +613,7 @@ resultsRoutes.get('/matches/:matchId/results/tags', async (c) => {
 
   const tagResults: Record<string, Record<string, any[]>> = {};
 
-  for (const { tag } of tags) {
+  for (const { tag } of tags as any[]) {
     const query = `
       ${MATCH_TOTALS_CTE}
       SELECT
@@ -410,6 +622,7 @@ resultsRoutes.get('/matches/:matchId/results/tags', async (c) => {
         COALESCE(mr.division, s.division) as division,
         COALESCE(mr.power_factor, s.power_factor) as power_factor,
         COALESCE(st.match_points, 0) as match_points,
+        COALESCE(st.achieved_points, 0) as achieved_points,
         ${MATCH_HF_COLUMN}
         COALESCE(st.total_time, 0) as time,
         COALESCE(tt.alpha, 0) as alpha,
@@ -428,33 +641,15 @@ resultsRoutes.get('/matches/:matchId/results/tags', async (c) => {
     const results = await sql.unsafe(query.replace(/\$1/g, `'${matchId}'`).replace(/\$2/g, `'${tag}'`));
 
     if (results.length > 0) {
-      const byDivision: Record<string, any[]> = {};
-      for (const r of results) {
-        const div = r.division || 'unknown';
-        if (!byDivision[div]) byDivision[div] = [];
-        byDivision[div].push(r);
-      }
-
-      tagResults[tag] = {};
-      for (const [div, divResults] of Object.entries(byDivision)) {
-        const highest = Number(divResults[0].match_points);
-        tagResults[tag][div] = divResults.map((r: any, i: number) => ({
-          ...r,
-          position: i + 1,
-          match_points: Number(r.match_points),
-          hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
-          match_percent: highest > 0 ? Math.round((Number(r.match_points) / highest) * 10000) / 100 : 0,
-        }));
-      }
+      tagResults[tag] = groupAndRank(
+        prepareMatchRows(results as any[], context, false),
+        context.divisionApplies,
+      );
     }
   }
 
   const dq = await runMatchQuery(matchId, true);
-  const dqRanked = dq.map((r: any) => ({
-    ...r,
-    match_points: Number(r.match_points),
-    match_percent: 0,
-  }));
+  const dqRanked = prepareMatchRows(dq, context, true);
 
   return c.json({ ...tagResults, dq: dqRanked });
 });
@@ -474,10 +669,12 @@ resultsRoutes.get('/matches/:matchId/shooters/:registrationId/stage-summaries', 
 
   if (!reg) return c.json({ error: 'Registration not found' }, 404);
 
+  const [match] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
   const registration = {
     first_name: reg.first_name,
     last_name: reg.last_name,
-    division: reg.reg_division || reg.shooter_division,
+    division: resolveDivisionForMatch(match ?? {}, reg.reg_division ?? reg.shooter_division) ?? '',
+    division_applies: matchHasDivisions(match ?? {}),
     category: reg.reg_category || reg.shooter_category,
     power_factor: reg.reg_power_factor || reg.shooter_power_factor,
     is_dq: reg.is_dq,

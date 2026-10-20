@@ -1,6 +1,8 @@
 import { Button } from 'flowbite-react';
+import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { divisionLabel } from '../../utils/constants';
+import { ringValuesForStage, scoringTypeProfile } from '../../utils/resultsProfile';
 import { useConstLabels } from '../../hooks/useConstLabels';
 import type { ShooterStageSummariesResponse, ShooterSummaryTarget } from '../../types/results';
 import type { Stage } from '../../types/stage';
@@ -72,6 +74,56 @@ function StageSummaryCard({
 
   const stage = mapStage(stageData.stage);
   const score = mapScore(stageData.score);
+  const profile = scoringTypeProfile(stage.scoring_type, stage.config);
+
+  if (profile === 'ring') {
+    const ringValues: number[] = score.score_data?.ring_values ?? [];
+    const configured = ringValuesForStage(stage.scoring_type, stage.config);
+    const displayValues = configured.length > 0
+      ? configured
+      : [...new Set(ringValues)].sort((a, b) => b - a);
+    const counts: Record<number, number> = {};
+    for (const value of ringValues) counts[value] = (counts[value] ?? 0) + 1;
+
+    return (
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 mb-3">
+        <h4 className="font-semibold text-sm dark:text-white mb-2">
+          {t('scoring.stage', { number: stage.stage_number })}: {stage.name}
+        </h4>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <span className="dark:text-gray-300 font-semibold">{t('results.points')}</span>
+          <span className="font-mono text-right font-semibold dark:text-white">{Number(stageData.score.net_points).toFixed(2)}</span>
+          {displayValues.map((value) => (
+            <Fragment key={value}>
+              <span className="dark:text-gray-300">{value === 11 ? 'X' : value === 0 ? t('results.ringMiss') : value}</span>
+              <span className="font-mono text-right dark:text-white">{counts[value] ?? 0}</span>
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (profile === 'hit_count') {
+    const hits = score.targets.filter((target: ShooterSummaryTarget) => target.target_data?.hit === true).length;
+    const misses = Math.max(0, score.targets.length - hits);
+
+    return (
+      <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 mb-3">
+        <h4 className="font-semibold text-sm dark:text-white mb-2">
+          {t('scoring.stage', { number: stage.stage_number })}: {stage.name}
+        </h4>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+          <span className="dark:text-gray-300">{t('results.hits')}</span>
+          <span className="font-mono text-right dark:text-white">{hits}</span>
+          <span className="dark:text-gray-300">{t('results.misses')}</span>
+          <span className="font-mono text-right dark:text-white">{misses}</span>
+          <span className="dark:text-gray-300 font-semibold">{t('results.points')}</span>
+          <span className="font-mono text-right font-semibold dark:text-white">{Number(stageData.score.net_points).toFixed(2)}</span>
+        </div>
+      </div>
+    );
+  }
 
   const steelTargets = score.targets.filter((t: ShooterSummaryTarget) => t.target_type === 'steel');
   const totalAlpha = score.targets.reduce((s: number, t: ShooterSummaryTarget) => s + t.alpha, 0) + steelTargets.filter(t => t.steel_hit === true).length;
@@ -141,7 +193,10 @@ export default function ShooterSummaryView({ summary, loading, onBack }: Shooter
 
   const visibleStages = summary?.stages.filter(s => {
     const st = s.stage.scoring_type;
-    return ['comstock', 'virginia', 'fixed_time', 'chrono', 'hit_factor', 'idpa'].includes(st);
+    return [
+      'comstock', 'virginia', 'fixed_time', 'chrono', 'hit_factor', 'idpa',
+      'bullseye', 'archery', 'issf', 'long_range', 'nrl22',
+    ].includes(st);
   }) ?? [];
 
   return (
@@ -157,7 +212,9 @@ export default function ShooterSummaryView({ summary, loading, onBack }: Shooter
         <span className="text-xl font-bold dark:text-white">{shooterName}</span>
         {summary && (
           <div className="flex gap-1 flex-wrap mt-1">
-            <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded">{divisionLabel(summary.registration.division)}</span>
+            {summary.registration.division_applies !== false && (
+              <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300 px-2 py-0.5 rounded">{divisionLabel(summary.registration.division)}</span>
+            )}
             <span className="text-xs bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300 px-2 py-0.5 rounded">{categoryLabel(summary.registration.category)}</span>
             <span className={`text-xs px-2 py-0.5 rounded ${summary.registration.power_factor === 'major' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'}`}>
               {powerFactorLabel(summary.registration.power_factor)}

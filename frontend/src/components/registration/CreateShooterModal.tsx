@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '../../stores/uiStore';
@@ -6,7 +6,7 @@ import { useMatchStore } from '../../stores/matchStore';
 import { useShooterStore } from '../../stores/shooterStore';
 import { api } from '../../services/api';
 import ShooterFormFields, { type ShooterFormData } from '../shared/ShooterFormFields';
-import { getDivisionsForMatch } from '../../utils/constants';
+import { getDefaultDivisionForMatch, getDivisionsForMatch } from '../../utils/constants';
 import { useEscClose } from '../../hooks/useEscClose';
 
 interface CreateShooterModalProps {
@@ -25,12 +25,21 @@ export default function CreateShooterModal({ show, onClose, matchId, onCreated }
   const match = matches.find((m: any) => m.id === matchId);
   const matchOrganization = match?.organization;
   const matchFirearmType = match?.firearm_type;
-  const defaultDivision = getDivisionsForMatch(match)[0]?.value ?? 'standard';
+  const divisions = getDivisionsForMatch(match);
+  const defaultDivision = getDefaultDivisionForMatch(match) ?? 'standard';
   const [squad, setSquad] = useState('');
   const [form, setForm] = useState<ShooterFormData>({
     first_name: '', last_name: '', category: 'regular', tag: null,
     division: defaultDivision, power_factor: 'minor', region: '', email: null,
   });
+
+  // Reopening the modal (or switching matches) must not keep a division from
+  // the previous match — NRL22, for example, defaults to `irons`.
+  useEffect(() => {
+    if (show) {
+      setForm((previous) => ({ ...previous, division: defaultDivision }));
+    }
+  }, [show, matchId, defaultDivision]);
 
   const handleCreate = async () => {
     if (!form.first_name || !form.last_name || !form.region) return;
@@ -54,7 +63,7 @@ export default function CreateShooterModal({ show, onClose, matchId, onCreated }
     <Modal show={show} onClose={onClose} size="lg">
       <ModalHeader>{t('registration.createTitle')}</ModalHeader>
       <ModalBody>
-        <ShooterFormFields form={form} onChange={setForm} showSquad squad={squad} onSquadChange={setSquad} organization={matchOrganization} firearmType={matchFirearmType} />
+        <ShooterFormFields form={form} onChange={setForm} showSquad squad={squad} onSquadChange={setSquad} showDivision={divisions.length > 0} organization={matchOrganization} firearmType={matchFirearmType} />
       </ModalBody>
       <ModalFooter>
         <Button color="gray" onClick={onClose}>{t('common.cancel')}</Button>

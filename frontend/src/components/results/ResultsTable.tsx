@@ -7,7 +7,12 @@ import { twMerge } from "tailwind-merge";
 
 const PROGRESS_THEME = { base: twMerge(theme.progress.base, "relative overflow-visible!") };
 
-export type ColumnKey = 'position' | 'shooter' | 'division' | 'matches' | 'time' | 'alpha' | 'charlie' | 'delta' | 'miss' | 'noShootHits' | 'procedurals' | 'matchPercent' | 'matchPoints' | 'stagePercent' | 'stagePoints' | 'hitFactor' | 'netPoints';
+export type ColumnKey =
+  | 'position' | 'shooter' | 'division' | 'matches' | 'time'
+  | 'alpha' | 'charlie' | 'delta' | 'miss' | 'noShootHits' | 'procedurals'
+  | 'matchPercent' | 'matchPoints' | 'stagePercent' | 'stagePoints'
+  | 'hitFactor' | 'netPoints' | 'hits' | 'misses'
+  | `ring:${number}`;
 
 interface ResultsTableProps {
   results: any[];
@@ -17,10 +22,25 @@ interface ResultsTableProps {
   onShooterClick?: (registrationId: string) => void;
 }
 
-const DETAIL_COLUMNS: ColumnKey[] = ['division', 'matches', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'matchPoints', 'stagePercent', 'stagePoints', 'hitFactor', 'netPoints'];
+const DETAIL_COLUMNS = new Set<string>([
+  'division', 'matches', 'time', 'alpha', 'charlie', 'delta', 'miss',
+  'noShootHits', 'procedurals', 'matchPercent', 'matchPoints', 'stagePercent',
+  'stagePoints', 'hitFactor', 'netPoints', 'hits', 'misses',
+]);
+
+export function isDetailColumn(col: ColumnKey): boolean {
+  return DETAIL_COLUMNS.has(col) || col.startsWith('ring:');
+}
 
 export function columnHeader(col: ColumnKey, t: (key: string, opts?: any) => string): string {
-  const map: Record<ColumnKey, string> = {
+  if (col.startsWith('ring:')) {
+    const value = Number(col.slice('ring:'.length));
+    if (value === 11) return 'X';
+    if (value === 0) return t('results.ringMiss');
+    return String(value);
+  }
+
+  const map: Record<string, string> = {
     position: t('results.position'),
     shooter: t('results.shooter'),
     division: t('results.division'),
@@ -38,11 +58,18 @@ export function columnHeader(col: ColumnKey, t: (key: string, opts?: any) => str
     stagePoints: t('results.points'),
     hitFactor: 'HF',
     netPoints: t('results.netPoints'),
+    hits: t('results.hits'),
+    misses: t('results.misses'),
   };
-  return map[col];
+  return map[col] ?? '';
 }
 
 export function cellValue(col: ColumnKey, r: any): string {
+  if (col.startsWith('ring:')) {
+    const value = col.slice('ring:'.length);
+    return String(r.ring_counts?.[value] ?? 0);
+  }
+
   switch (col) {
     case 'position': return String(r.position);
     case 'shooter': return `${r.first_name} ${r.last_name}`;
@@ -61,6 +88,9 @@ export function cellValue(col: ColumnKey, r: any): string {
     case 'hitFactor': return formatHitFactor(r.hit_factor, '—');
     case 'netPoints': return r.net_points?.toFixed(2);
     case 'matches': return `${r.matches_count ?? 0}/${r.matches_required ?? 0}`;
+    case 'hits': return String(r.hits ?? 0);
+    case 'misses': return String(r.misses ?? 0);
+    default: return '';
   }
 }
 
@@ -78,7 +108,7 @@ export function cellClassName(col: ColumnKey): string {
 /** Shared results table — responsive: desktop table, mobile card layout */
 export default function ResultsTable({ results, scored, columns, showDqBadge = true, onShooterClick }: ResultsTableProps) {
   const { t } = useTranslation();
-  const detailColumns = columns.filter(c => DETAIL_COLUMNS.includes(c));
+  const detailColumns = columns.filter(isDetailColumn);
 
   return (
     <>

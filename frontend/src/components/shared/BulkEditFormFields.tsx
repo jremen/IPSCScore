@@ -20,6 +20,8 @@ interface BulkEditFormFieldsProps {
   form: BulkEditForm;
   onChange: (form: BulkEditForm) => void;
   showSquad?: boolean;
+  /** Hide the division field for sports that do not use divisions (archery). */
+  showDivision?: boolean;
   /** Organization to filter divisions by (e.g. 'IPSC', 'USPSA') */
   organization?: string;
   /** Firearm type to filter divisions by (e.g. 'rifle', 'shotgun').
@@ -29,7 +31,7 @@ interface BulkEditFormFieldsProps {
 
 /** Shared form for bulk editing shooters or registrations.
  *  Each field has a "Change this field?" checkbox — only checked fields are included in the update. */
-export default function BulkEditFormFields({ form, onChange, showSquad = false, organization, firearmType }: BulkEditFormFieldsProps) {
+export default function BulkEditFormFields({ form, onChange, showSquad = false, showDivision = true, organization, firearmType }: BulkEditFormFieldsProps) {
   const { t } = useTranslation();
   const divisions = firearmType || organization
     ? getDivisionsForMatch({ organization, firearm_type: firearmType })
@@ -41,31 +43,33 @@ export default function BulkEditFormFields({ form, onChange, showSquad = false, 
   return (
     <div className="space-y-4">
       {/* Division */}
-      <div className="flex items-center gap-3">
-        <ToggleSwitch
-          checked={form.changeDivision}
-          onChange={(checked) => update({ changeDivision: checked, division: checked ? form.division || divisions[0].value : '' })}
-          label={t('bulkEdit.changeField', { field: t('scoring.division') })}
-        />
-        <div className="flex-1">
-          {form.changeDivision && (
-            <Select
-              sizing="sm"
-              value={form.division}
-              onChange={(e) => update({ division: e.target.value })}
-              className="mt-1"
-            >
-              {groupedDivisions
-                ? groupedDivisions.map((g) => (
-                  <optgroup key={g.group} label={g.group}>
-                    {g.divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                  </optgroup>
-                ))
-                : divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-            </Select>
-          )}
+      {showDivision && (
+        <div className="flex items-center gap-3">
+          <ToggleSwitch
+            checked={form.changeDivision}
+            onChange={(checked) => update({ changeDivision: checked, division: checked ? form.division || divisions[0]?.value || '' : '' })}
+            label={t('bulkEdit.changeField', { field: t('scoring.division') })}
+          />
+          <div className="flex-1">
+            {form.changeDivision && (
+              <Select
+                sizing="sm"
+                value={form.division}
+                onChange={(e) => update({ division: e.target.value })}
+                className="mt-1"
+              >
+                {groupedDivisions
+                  ? groupedDivisions.map((g) => (
+                    <optgroup key={g.group} label={g.group}>
+                      {g.divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </optgroup>
+                  ))
+                  : divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+              </Select>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Category */}
       <div className="flex items-center gap-3">

@@ -28,6 +28,7 @@ export default function PublicResultsView() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [matchName, setMatchName] = useState<string>('');
+  const [publicMatch, setPublicMatch] = useState<any>(null);
 
   // Load current match on mount
   useEffect(() => {
@@ -38,6 +39,10 @@ export default function PublicResultsView() {
         if (currentMatch?.id) {
           setActiveMatch(currentMatch.id);
           setMatchName(currentMatch.name || '');
+          // The public page does not load the full match list. Keep the
+          // current match locally so the results view can tell whether this
+          // sport uses divisions (archery/ISSF do not).
+          setPublicMatch(currentMatch);
         } else {
           setError('noCurrentMatch');
         }
@@ -132,7 +137,7 @@ export default function PublicResultsView() {
 
       {/* Results content */}
       <main className="flex-1">
-        <ResultsOverview isPublic />
+        <ResultsOverview isPublic matchOverride={publicMatch} />
       </main>
     </div>
   );

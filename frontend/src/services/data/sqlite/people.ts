@@ -1,6 +1,7 @@
 import { all, nowIso, one, run, transaction, uuid } from './db';
 import { toRegistration, toShooter } from './mappers';
 import { recalculateMatch } from './scoring';
+import { getDivisionsForMatch, resolveDivisionForMatch } from '../../../utils/constants';
 
 /** Shooter directory and match-registration management for the local runtime. */
 
@@ -238,13 +239,29 @@ const REGISTRATION_SELECT = `
   JOIN shooters s ON s.id = mr.shooter_id`;
 
 export async function listRegistrations(matchId: string) {
-  const rows = await all<any>(
-    `${REGISTRATION_SELECT}
-     WHERE mr.match_id = ?
-     ORDER BY mr.squad IS NULL, mr.squad, s.last_name, s.first_name`,
-    [matchId],
-  );
-  return rows.map(toRegistration);
+  const [rows, match] = await Promise.all([
+    all<any>(
+      `${REGISTRATION_SELECT}
+       WHERE mr.match_id = ?
+       ORDER BY mr.squad IS NULL, mr.squad, s.last_name, s.first_name`,
+      [matchId],
+    ),
+    one<{ organization: string; firearm_type: string }>(
+      `SELECT organization, firearm_type FROM matches WHERE id = ?`,
+      [matchId],
+    ),
+  ]);
+  const divisionApplies = getDivisionsForMatch(match).length > 0;
+  return rows.map((row) => {
+    const registration = toRegistration(row);
+    return {
+      ...registration,
+      // Mirror the results query: an explicit registration override wins even
+      // when invalid (resolved to the match default); otherwise inherit.
+      effective_division: resolveDivisionForMatch(match, registration.reg_division ?? registration.division) ?? '',
+      division_applies: divisionApplies,
+    };
+  });
 }
 
 export async function registerShooters(matchId: string, data: { shooterId?: string; shooterIds?: string[]; squad?: number | null }) {
@@ -252,6 +269,10 @@ export async function registerShooters(matchId: string, data: { shooterId?: stri
   if (shooterIds.length === 0) throw new Error('shooterId or shooterIds required');
 
   const results: any[] = [];
+  const match = await one<{ organization: string; firearm_type: string }>(
+    `SELECT organization, firearm_type FROM matches WHERE id = ?`,
+    [matchId],
+  );
 
   await transaction(async () => {
     for (const shooterId of shooterIds) {
@@ -264,13 +285,19 @@ export async function registerShooters(matchId: string, data: { shooterId?: stri
         continue;
       }
 
+      const shooter = await one<{ division: string }>(
+        `SELECT division FROM shooters WHERE id = ?`,
+        [shooterId],
+      );
+      const division = resolveDivisionForMatch(match, shooter?.division);
+
       const id = uuid();
       await run(
-        `INSERT INTO match_registrations (id, match_id, shooter_id, squad, is_dq, registered_at)
-         VALUES (?, ?, ?, ?, 0, ?)`,
-        [id, matchId, shooterId, data.squad ?? null, nowIso()],
+        `INSERT INTO match_registrations (id, match_id, shooter_id, squad, division, is_dq, registered_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?)`,
+        [id, matchId, shooterId, data.squad ?? null, division, nowIso()],
       );
-      results.push({ id, match_id: matchId, shooter_id: shooterId, squad: data.squad ?? null });
+      results.push({ id, match_id: matchId, shooter_id: shooterId, squad: data.squad ?? null, division });
     }
   });
 
@@ -281,15 +308,21 @@ export async function createAndAddShooter(matchId: string, data: ShooterInput & 
   let shooter: any;
   let registration: any;
 
+  const match = await one<{ organization: string; firearm_type: string }>(
+    `SELECT organization, firearm_type FROM matches WHERE id = ?`,
+    [matchId],
+  );
+
   await transaction(async () => {
     shooter = await createShooter(data);
+    const division = resolveDivisionForMatch(match, data.division);
     const id = uuid();
     await run(
-      `INSERT INTO match_registrations (id, match_id, shooter_id, squad, is_dq, registered_at)
-       VALUES (?, ?, ?, ?, 0, ?)`,
-      [id, matchId, shooter.id, data.squad ?? null, nowIso()],
+      `INSERT INTO match_registrations (id, match_id, shooter_id, squad, division, is_dq, registered_at)
+       VALUES (?, ?, ?, ?, ?, 0, ?)`,
+      [id, matchId, shooter.id, data.squad ?? null, division, nowIso()],
     );
-    registration = { id, match_id: matchId, shooter_id: shooter.id, squad: data.squad ?? null };
+    registration = { id, match_id: matchId, shooter_id: shooter.id, squad: data.squad ?? null, division };
   });
 
   return { shooter, registration };

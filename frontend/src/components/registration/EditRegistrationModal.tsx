@@ -23,20 +23,27 @@ export default function EditRegistrationModal({ show, onClose, registration, mat
   useEscClose(onClose);
   const match = matches.find((m: any) => m.id === matchId);
   const divisions = getDivisionsForMatch(match);
+  const divisionApplies = divisions.length > 0;
   const [form, setForm] = useState({ squad: '', division: '', category: '', power_factor: '', tag: '' });
 
-  // Sync form when registration changes or modal opens
+  // Sync form when registration changes or modal opens. A stored override is
+  // only shown when it is valid for this match; an inherited division that
+  // does not belong to the match falls back to "Default" (resolved at read
+  // time), so saving cannot preserve the invalid value.
   useEffect(() => {
     if (registration) {
+      const storedOverride = registration.reg_division as string | null | undefined;
+      const overrideIsValid = !!storedOverride
+        && divisions.some((division) => division.value === storedOverride);
       setForm({
         squad: registration.squad === null || registration.squad === undefined ? '' : String(registration.squad),
-        division: registration.reg_division || '',
+        division: divisionApplies && overrideIsValid ? storedOverride! : '',
         category: registration.reg_category || '',
         power_factor: registration.reg_power_factor || '',
         tag: registration.tag || '',
       });
     }
-  }, [registration]);
+  }, [registration, divisionApplies, match?.organization, match?.firearm_type]);
 
   const handleSave = async () => {
     if (!matchId || !registration) return;
@@ -61,13 +68,15 @@ export default function EditRegistrationModal({ show, onClose, registration, mat
             <Label>{t('registration.squad')}</Label>
             <InputField type="number" step="1" min="0" value={form.squad} onChange={(v) => setForm({ ...form, squad: v })} placeholder={t('registration.leaveBlankDefault')} />
           </div>
-          <div>
-            <Label>{t('registration.divisionOverride')}</Label>
-            <Select value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value })}>
-              <option value="">{t('registration.defaultOption')}</option>
-              {divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-            </Select>
-          </div>
+          {divisions.length > 0 && (
+            <div>
+              <Label>{t('registration.divisionOverride')}</Label>
+              <Select value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value })}>
+                <option value="">{t('registration.defaultOption')}</option>
+                {divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+              </Select>
+            </div>
+          )}
           <div>
             <Label>{t('registration.categoryOverride')}</Label>
             <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>

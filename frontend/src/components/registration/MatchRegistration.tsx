@@ -37,6 +37,14 @@ export default function MatchRegistration() {
 
   const { search, setSearch, divisionFilter, setDivisionFilter, categoryFilter, setCategoryFilter, filtered, hasActiveFilters, clearFilters } = useRegistrationFilter(registrations);
 
+  // When switching to a sport without divisions, drop any division filter left
+  // over from the previous match so it cannot hide every registration.
+  useEffect(() => {
+    if (divisions.length === 0 && divisionFilter) {
+      setDivisionFilter('');
+    }
+  }, [divisions.length, divisionFilter, setDivisionFilter]);
+
   const filteredIds = filtered.map((r) => r.id);
   const selection = useSelection(filteredIds);
 
@@ -209,19 +217,21 @@ export default function MatchRegistration() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <div className="min-w-45">
-            <Label htmlFor="reg-div">{t('shooters.division')}</Label>
-            <Select
-              id="reg-div"
-              value={divisionFilter}
-              onChange={(e) => setDivisionFilter(e.target.value)}
-            >
-              <option value="">{t('registration.allDivisions')}</option>
-              {divisions.map((d) => (
-                <option key={d.value} value={d.value}>{d.label}</option>
-              ))}
-            </Select>
-          </div>
+          {divisions.length > 0 && (
+            <div className="min-w-45">
+              <Label htmlFor="reg-div">{t('shooters.division')}</Label>
+              <Select
+                id="reg-div"
+                value={divisionFilter}
+                onChange={(e) => setDivisionFilter(e.target.value)}
+              >
+                <option value="">{t('registration.allDivisions')}</option>
+                {divisions.map((d) => (
+                  <option key={d.value} value={d.value}>{d.label}</option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div className="min-w-45">
             <Label htmlFor="reg-cat">{t('shooters.category')}</Label>
             <Select
@@ -251,6 +261,7 @@ export default function MatchRegistration() {
             onRemove={handleRemove}
             onUngroup={handleUngroupSingle}
             onDragToGroup={handleDragToGroup}
+            showDivision={divisions.length > 0}
           />
         ) : (
           <p className="text-center text-gray-500 mt-8">{t('registration.searchEmpty')}</p>

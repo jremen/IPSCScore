@@ -3,27 +3,17 @@ import { api } from '../services/api';
 import { useUIStore } from '../stores/uiStore';
 import { useResultsStore, type DqShooter, type OverallResult } from '../stores/resultsStore';
 import { hasHitFactor } from '../utils/hitFactor';
+import {
+  divisionAppliesForRows,
+  resultColumns,
+  resultsProfileOfRows,
+  ringValuesOfRows,
+} from '../utils/resultsProfile';
 import { useKioskAutoplay } from './useKioskAutoplay';
 import type { ColumnKey } from '../components/results/ResultsTable';
 
 /** Fallback poll interval when SSE is unavailable. */
 const REFRESH_INTERVAL_MS = 60000;
-
-/** Columns shown in the kiosk division table. */
-const DIVISION_COLUMNS: ColumnKey[] = [
-  'position',
-  'shooter',
-  'time',
-  'alpha',
-  'charlie',
-  'delta',
-  'miss',
-  'noShootHits',
-  'procedurals',
-  'matchPercent',
-  'hitFactor',
-  'matchPoints',
-];
 
 /** Cell alignment + typography for a kiosk division table column. */
 export function cellClass(col: ColumnKey): string {
@@ -59,6 +49,8 @@ export interface PublicResultsKioskModel {
   activeDivision: string | null;
   /** Zero-based index of the active division, or -1 when there is none. */
   divisionIndex: number;
+  /** Whether the match uses divisions at all. */
+  divisionApplies: boolean;
   /** Result rows for the active division. */
   rows: OverallResult[];
   /** Disqualified shooters for the active division. */
@@ -184,18 +176,26 @@ export function usePublicResultsKiosk(): PublicResultsKioskModel {
   }, [activeDivision, currentDivision]);
 
   const rows = activeDivision ? divisionResults[activeDivision] ?? [] : [];
-  const dqRows = useMemo(
-    () => (activeDivision ? dqDivisions.filter((d) => d.division === activeDivision) : []),
-    [activeDivision, dqDivisions],
-  );
-
-  const showHitFactor = useMemo(
-    () => Object.values(divisionResults).some((divisionRows) => hasHitFactor(divisionRows)),
+  const allRows = useMemo(
+    () => Object.values(divisionResults).flat(),
     [divisionResults],
   );
+  const profile = resultsProfileOfRows(allRows);
+  const divisionApplies = divisionAppliesForRows(allRows, divisionAppliesForRows(dqDivisions));
+  const dqRows = useMemo(
+    () => (activeDivision && divisionApplies
+      ? dqDivisions.filter((d) => d.division === activeDivision)
+      : dqDivisions),
+    [activeDivision, divisionApplies, dqDivisions],
+  );
+
   const columns = useMemo(
-    () => (showHitFactor ? DIVISION_COLUMNS : DIVISION_COLUMNS.filter((col) => col !== 'hitFactor')),
-    [showHitFactor],
+    () => resultColumns(profile, {
+      division: false,
+      hasHitFactor: profile === 'zone' && Object.values(divisionResults).some((divisionRows) => hasHitFactor(divisionRows)),
+      ringValues: ringValuesOfRows(allRows),
+    }),
+    [allRows, divisionResults, profile],
   );
 
   const goNext = useCallback(() => {
@@ -227,6 +227,7 @@ export function usePublicResultsKiosk(): PublicResultsKioskModel {
     divisionKeys,
     activeDivision,
     divisionIndex,
+    divisionApplies,
     rows,
     dqRows,
     columns,

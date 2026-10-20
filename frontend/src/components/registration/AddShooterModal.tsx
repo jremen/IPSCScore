@@ -4,8 +4,9 @@ import { InputField } from '../shared/InputField';
 import { useTranslation } from 'react-i18next';
 import { useUIStore } from '../../stores/uiStore';
 import { useShooterSearch } from '../../hooks/useShooterSearch';
+import { useMatchStore } from '../../stores/matchStore';
 import { api } from '../../services/api';
-import { divisionLabel } from '../../utils/constants';
+import { divisionLabel, getDivisionsForMatch, resolveDivisionForMatch } from '../../utils/constants';
 import { useEscClose } from '../../hooks/useEscClose';
 
 interface AddShooterModalProps {
@@ -20,7 +21,10 @@ interface AddShooterModalProps {
 
 export default function AddShooterModal({ show, onClose, matchId, registeredShooterIds, onAdded, onCreate }: AddShooterModalProps) {
   const addToast = useUIStore((s) => s.addToast);
+  const matches = useMatchStore((s) => s.matches);
   const { t } = useTranslation();
+  const match = matches.find((m: any) => m.id === matchId);
+  const divisionApplies = getDivisionsForMatch(match).length > 0;
   const [squad, setSquad] = useState('');
   const [addedIds, setAddedIds] = useState<Set<string>>(new Set());
 
@@ -64,7 +68,11 @@ export default function AddShooterModal({ show, onClose, matchId, registeredShoo
             <div key={s.id} className="w-full text-left p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center justify-between">
               <span className="dark:text-white">{s.first_name} {s.last_name}</span>
               <div className="flex items-center gap-1">
-                <Badge size="xs" color="blue">{divisionLabel(s.division)}</Badge>
+                {divisionApplies && (
+                  <Badge size="xs" color="blue">
+                    {divisionLabel(resolveDivisionForMatch(match, s.division) || s.division)}
+                  </Badge>
+                )}
                 <Badge size="xs" color="gray">{s.region}</Badge>
                 <Button size="xs" className="ml-2" onClick={() => { handleAdd(s.id); }}>+&nbsp;{t('common.add')}</Button>
               </div>

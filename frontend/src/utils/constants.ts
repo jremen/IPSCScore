@@ -72,25 +72,78 @@ export const ORGANIZATION_DIVISIONS: Record<string, string[]> = {
 
 /** Map firearm type to its applicable division values.
  *  Used for IPSC Rifle and IPSC Shotgun matches where the organization's
- *  handgun/PCC divisions don't apply. Takes precedence over ORGANIZATION_DIVISIONS. */
+ *  handgun/PCC divisions don't apply. Organizations that define their own
+ *  division set (NRL22, PRS, NRA) keep those even for rifle matches. */
 export const FIREARM_DIVISIONS: Record<string, string[]> = {
   rifle: ['sa_standard', 'sa_open', 'mac', 'mab'],
   shotgun: ['shotgun_open', 'shotgun_modified', 'shotgun_standard', 'shotgun_standard_manual'],
 };
 
-/** Get divisions filtered by both organization AND firearm type.
- *  Firearm-specific overrides take precedence (rifle/shotgun have their own
- *  division sets independent of the match's organization). Returns all divisions
- *  when no recognizable context is provided. */
+/** Get divisions filtered by organization and firearm type.
+ *  IPSC rifle/shotgun use their own division sets; other known organizations
+ *  use theirs. Returns all divisions when no recognizable context is provided. */
 export function getDivisionsForMatch(
   match: { organization?: string; firearm_type?: string } | null | undefined,
 ) {
   const firearmType = match?.firearm_type;
+  const organization = match?.organization;
+  // Sports without divisions ignore both the firearm type and inherited
+  // divisions (ISSF rifle still has no IPSC-style divisions).
+  if (organization && ORGANIZATION_DIVISIONS[organization]?.length === 0) return [];
+  // Archery has no divisions at all — the bow category is the only distinction
+  // the sport uses and the app does not model it as a division.
+  if (firearmType === 'bow') return [];
+  // IPSC rifle/shotgun use firearm-specific divisions instead of the
+  // handgun/PCC list. Other organizations that define their own divisions
+  // (NRL22, PRS, NRA, …) keep them even when the firearm type is rifle.
+  if (organization === 'IPSC' && firearmType && FIREARM_DIVISIONS[firearmType]) {
+    const allowed = FIREARM_DIVISIONS[firearmType];
+    return DIVISIONS.filter(d => allowed.includes(d.value));
+  }
+  if (organization && ORGANIZATION_DIVISIONS[organization]) {
+    return getDivisionsForOrganization(organization);
+  }
   if (firearmType && FIREARM_DIVISIONS[firearmType]) {
     const allowed = FIREARM_DIVISIONS[firearmType];
     return DIVISIONS.filter(d => allowed.includes(d.value));
   }
-  return getDivisionsForOrganization(match?.organization);
+  return getDivisionsForOrganization(organization);
+}
+
+/** True when the match's organization/firearm type uses divisions. */
+export function matchHasDivisions(
+  match: { organization?: string; firearm_type?: string } | null | undefined,
+): boolean {
+  return getDivisionsForMatch(match).length > 0;
+}
+
+/** Default division when an inherited/submitted division is not applicable. */
+export function getDefaultDivisionForMatch(
+  match: { organization?: string; firearm_type?: string } | null | undefined,
+): string | null {
+  const divisions = getDivisionsForMatch(match);
+  if (divisions.length === 0) return null;
+  if (match?.organization === 'NRL22' && divisions.some(d => d.value === 'irons')) {
+    return 'irons';
+  }
+  return divisions[0].value;
+}
+
+/**
+ * Resolve the division used for a registration. A valid explicit match
+ * override wins; otherwise invalid inherited divisions fall back to the
+ * match's default. Returns null when the match has no divisions.
+ */
+export function resolveDivisionForMatch(
+  match: { organization?: string; firearm_type?: string } | null | undefined,
+  ...candidates: Array<string | null | undefined>
+): string | null {
+  const divisions = getDivisionsForMatch(match);
+  if (divisions.length === 0) return null;
+  for (const candidate of candidates) {
+    if (candidate && divisions.some(d => d.value === candidate)) return candidate;
+  }
+  return getDefaultDivisionForMatch(match);
 }
 
 /** Get divisions filtered by organization. Returns all if org is undefined. */

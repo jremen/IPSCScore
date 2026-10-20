@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Alert } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { api } from '../../services/api';
 import { useMatchStore } from '../../stores/matchStore';
 import BulkEditFormFields, { type BulkEditForm } from '../shared/BulkEditFormFields';
-import { getDivisionsForMatch } from '../../utils/constants';
+import { getDefaultDivisionForMatch, getDivisionsForMatch } from '../../utils/constants';
 import { useEscClose } from '../../hooks/useEscClose';
 
 interface BulkEditRegistrationsModalProps {
@@ -21,7 +21,8 @@ export default function BulkEditRegistrationsModal({ show, onClose, selectedIds,
   const match = matches.find((m: any) => m.id === matchId);
   const matchOrganization = match?.organization;
   const matchFirearmType = match?.firearm_type;
-  const defaultDivision = getDivisionsForMatch(match)[0]?.value ?? 'standard';
+  const divisions = getDivisionsForMatch(match);
+  const defaultDivision = getDefaultDivisionForMatch(match) ?? 'standard';
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ updated: number; failed: Array<{ id: string; name: string; reason: string }> } | null>(null);
   const [form, setForm] = useState<BulkEditForm>({
@@ -31,6 +32,13 @@ export default function BulkEditRegistrationsModal({ show, onClose, selectedIds,
     changeTag: false, tag: '',
     changeSquad: false, squad: '',
   });
+
+  // Refresh the implied division when the modal opens for a different match.
+  useEffect(() => {
+    if (show) {
+      setForm((prev) => ({ ...prev, division: defaultDivision }));
+    }
+  }, [show, defaultDivision]);
 
   const handleClose = () => {
     setResult(null);
@@ -92,7 +100,7 @@ export default function BulkEditRegistrationsModal({ show, onClose, selectedIds,
             <p className="text-sm text-gray-600 dark:text-gray-400">
               {t('bulkEdit.selectFields')}
             </p>
-            <BulkEditFormFields form={form} onChange={setForm} showSquad organization={matchOrganization} firearmType={matchFirearmType} />
+            <BulkEditFormFields form={form} onChange={setForm} showSquad showDivision={divisions.length > 0} organization={matchOrganization} firearmType={matchFirearmType} />
           </div>
         )}
       </ModalBody>

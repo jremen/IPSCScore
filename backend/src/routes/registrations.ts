@@ -2,6 +2,11 @@ import { Hono } from 'hono';
 import { sql } from '../db/client.js';
 import { env } from '../env.js';
 import { audit } from '../services/audit.js';
+import {
+  matchHasDivisions,
+  resolveDivisionForMatch,
+  type MatchDivisionContext,
+} from '../utils/matchDivisions.js';
 
 export const registrationRoutes = new Hono();
 
@@ -21,6 +26,7 @@ registrationRoutes.get('/matches/:matchId/registrations', async (c) => {
   const role = ((c as any).get('authRole') as string) || 'anonymous';
   const isPublic = role === 'anonymous';
 
+  const [match] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
   const registrations = await sql`
     SELECT mr.id, mr.squad, mr.group_id, mr.division as reg_division, mr.category as reg_category,
            mr.power_factor as reg_power_factor, mr.is_dq, mr.dq_reason,
@@ -32,11 +38,16 @@ registrationRoutes.get('/matches/:matchId/registrations', async (c) => {
     ORDER BY mr.squad NULLS LAST, s.last_name, s.first_name
   `;
 
+  const matchContext: MatchDivisionContext = match ?? {};
   const resolved = registrations.map((r: any) => ({
     ...scrubPII(r, isPublic),
-    effective_division: r.reg_division || r.division,
+    // Mirror the results query: a registration override wins even when it is
+    // invalid (resolved to the match default), otherwise inherit the shooter's
+    // global division.
+    effective_division: resolveDivisionForMatch(matchContext, r.reg_division ?? r.division) ?? '',
     effective_category: r.reg_category || r.category,
     effective_power_factor: r.reg_power_factor || r.power_factor,
+    division_applies: matchHasDivisions(matchContext),
   }));
 
   return c.json(resolved);
@@ -126,12 +137,15 @@ registrationRoutes.post('/matches/:matchId/registrations', async (c) => {
     return c.json({ error: 'shooterId or shooterIds required' }, 400);
   }
 
+  const [match] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
   const results = [];
   for (const shooterId of shooterIds) {
     try {
+      const [shooter] = await sql`SELECT division FROM shooters WHERE id = ${shooterId}`;
+      const registrationDivision = resolveDivisionForMatch(match ?? {}, shooter?.division);
       const [reg] = await sql`
-        INSERT INTO match_registrations (match_id, shooter_id, squad)
-        VALUES (${matchId}, ${shooterId}, ${body.squad || null})
+        INSERT INTO match_registrations (match_id, shooter_id, squad, division)
+        VALUES (${matchId}, ${shooterId}, ${body.squad || null}, ${registrationDivision})
         RETURNING *
       `;
       results.push(reg);
@@ -163,9 +177,12 @@ registrationRoutes.post('/matches/:matchId/registrations/create-and-add', async 
     RETURNING *
   `;
 
+  const [match] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
+  const registrationDivision = resolveDivisionForMatch(match ?? {}, division);
+
   const [reg] = await sql`
-    INSERT INTO match_registrations (match_id, shooter_id, squad)
-    VALUES (${matchId}, ${shooter.id}, ${squad || null})
+    INSERT INTO match_registrations (match_id, shooter_id, squad, division)
+    VALUES (${matchId}, ${shooter.id}, ${squad || null}, ${registrationDivision})
     RETURNING *
   `;
 

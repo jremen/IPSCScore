@@ -1,11 +1,20 @@
 import { all, one } from './db';
+import { parseJson } from './mappers';
+import { getDivisionsForMatch, resolveDivisionForMatch } from '../../../utils/constants';
+import {
+  matchResultsProfile,
+  matchRingValues,
+  ringValuesForStage,
+  scoringTypeProfile,
+  type ResultsProfile,
+} from '../../../utils/resultsProfile';
 
 /**
  * Match result computation for the local (on-device) runtime.
  *
  * The backend does this in PostgreSQL with CTEs and window functions. Here we
  * load the match into memory and compute the same figures in TypeScript, reusing
- * the rounded percentages from `@ipscscore/core` so both runtimes agree exactly.
+ * the rounded percentages from `@ipscore/core` so both runtimes agree exactly.
  *
  * Scale note: a single match is at most a few hundred shooters × ~30 stages, so
  * an in-memory pass is far cheaper than the round trips it replaces.
@@ -36,6 +45,7 @@ export interface ScoreRow {
   registration_id: string;
   stage_id: string;
   scoring_type: string;
+  config: string | null;
   stage_number: number;
   time: number | null;
   total_time: number | null;
@@ -45,6 +55,7 @@ export interface ScoreRow {
   stage_points: number;
   procedural_count: number;
   is_dnf: number;
+  score_data: string | null;
 }
 
 interface TargetTotals {
@@ -53,6 +64,39 @@ interface TargetTotals {
   delta: number;
   miss: number;
   no_shoot: number;
+}
+
+interface MatchInfo {
+  organization: string;
+  firearm_type: string;
+}
+
+interface StageRow {
+  id: string;
+  stage_number: number;
+  name: string;
+  scoring_type: string;
+  config: string | null;
+}
+
+interface Breakdown {
+  ring_counts: Record<string, number>;
+  hits: number;
+  misses: number;
+}
+
+interface ScoreBreakdownRow {
+  registration_id: string;
+  scoring_type: string;
+  config: string | null;
+  score_data: string | null;
+}
+
+interface TargetBreakdownRow {
+  registration_id: string;
+  scoring_type: string;
+  config: string | null;
+  target_data: string | null;
 }
 
 const HIT_FACTOR_TYPES = ['comstock', 'virginia', 'hit_factor'];
@@ -75,12 +119,27 @@ export async function loadRegistrations(matchId: string): Promise<RegistrationRo
 
 export async function loadScores(matchId: string): Promise<ScoreRow[]> {
   return all<ScoreRow>(
-    `SELECT ss.id, ss.registration_id, ss.stage_id, st.scoring_type, st.stage_number,
+    `SELECT ss.id, ss.registration_id, ss.stage_id, st.scoring_type, st.config, st.stage_number,
             ss.time, ss.total_time, ss.net_points, ss.hit_factor,
-            ss.stage_percent, ss.stage_points, ss.procedural_count, ss.is_dnf
+            ss.stage_percent, ss.stage_points, ss.procedural_count, ss.is_dnf, ss.score_data
      FROM stage_scores ss
      JOIN stages st ON st.id = ss.stage_id
      WHERE ss.match_id = ?`,
+    [matchId],
+  );
+}
+
+async function loadMatchInfo(matchId: string): Promise<MatchInfo | null> {
+  return one<MatchInfo>(
+    `SELECT organization, firearm_type FROM matches WHERE id = ?`,
+    [matchId],
+  );
+}
+
+async function loadStageRows(matchId: string): Promise<StageRow[]> {
+  return all<StageRow>(
+    `SELECT id, stage_number, name, scoring_type, config
+     FROM stages WHERE match_id = ? ORDER BY stage_number`,
     [matchId],
   );
 }
@@ -125,6 +184,70 @@ async function loadTargetTotals(matchId: string): Promise<Map<string, TargetTota
   return map;
 }
 
+async function loadMatchTargetRows(matchId: string): Promise<TargetBreakdownRow[]> {
+  return all<TargetBreakdownRow>(
+    `SELECT ss.registration_id, st.scoring_type, st.config, ts.target_data
+     FROM stage_scores ss
+     JOIN stages st ON st.id = ss.stage_id
+     JOIN target_scores ts ON ts.stage_score_id = ss.id
+     WHERE ss.match_id = ?`,
+    [matchId],
+  );
+}
+
+async function loadStageTargetRows(stageId: string): Promise<TargetBreakdownRow[]> {
+  return all<TargetBreakdownRow>(
+    `SELECT ss.registration_id, st.scoring_type, st.config, ts.target_data
+     FROM stage_scores ss
+     JOIN stages st ON st.id = ss.stage_id
+     JOIN target_scores ts ON ts.stage_score_id = ss.id
+     WHERE ss.stage_id = ?`,
+    [stageId],
+  );
+}
+
+function emptyBreakdown(): Breakdown {
+  return { ring_counts: {}, hits: 0, misses: 0 };
+}
+
+function buildBreakdown(
+  scoreRows: ScoreBreakdownRow[],
+  targetRows: TargetBreakdownRow[],
+): Map<string, Breakdown> {
+  const breakdown = new Map<string, Breakdown>();
+  const entryFor = (registrationId: string) => {
+    let entry = breakdown.get(registrationId);
+    if (!entry) {
+      entry = emptyBreakdown();
+      breakdown.set(registrationId, entry);
+    }
+    return entry;
+  };
+
+  for (const row of scoreRows) {
+    if (scoringTypeProfile(row.scoring_type, parseJson(row.config, {})) !== 'ring') continue;
+    const scoreData = parseJson<any>(row.score_data, {});
+    const ringValues: unknown[] = Array.isArray(scoreData?.ring_values) ? scoreData.ring_values : [];
+    const entry = entryFor(row.registration_id);
+    for (const value of ringValues) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric)) continue;
+      const key = String(numeric);
+      entry.ring_counts[key] = (entry.ring_counts[key] ?? 0) + 1;
+    }
+  }
+
+  for (const row of targetRows) {
+    if (scoringTypeProfile(row.scoring_type, parseJson(row.config, {})) !== 'hit_count') continue;
+    const targetData = parseJson<any>(row.target_data, {});
+    const entry = entryFor(row.registration_id);
+    if (targetData?.hit === true) entry.hits += 1;
+    else entry.misses += 1;
+  }
+
+  return breakdown;
+}
+
 function effective(reg: RegistrationRow) {
   return {
     division: reg.reg_division || reg.division,
@@ -135,6 +258,7 @@ function effective(reg: RegistrationRow) {
 
 interface MatchTotals {
   match_points: number;
+  achieved_points: number;
   procedurals: number;
   total_time: number;
   hf_net_points: number;
@@ -147,11 +271,19 @@ function aggregateTotals(scores: ScoreRow[]): Map<string, MatchTotals> {
   for (const score of scores) {
     let totals = map.get(score.registration_id);
     if (!totals) {
-      totals = { match_points: 0, procedurals: 0, total_time: 0, hf_net_points: 0, hf_time: 0 };
+      totals = {
+        match_points: 0,
+        achieved_points: 0,
+        procedurals: 0,
+        total_time: 0,
+        hf_net_points: 0,
+        hf_time: 0,
+      };
       map.set(score.registration_id, totals);
     }
 
     totals.match_points += score.stage_points ?? 0;
+    totals.achieved_points += score.net_points ?? 0;
     totals.procedurals += score.procedural_count ?? 0;
 
     if (TIME_BASED_TYPES.includes(score.scoring_type)) {
@@ -179,11 +311,18 @@ interface ResultRow {
   first_name: string;
   last_name: string;
   division: string;
+  division_applies: boolean;
   category: string;
   power_factor: string;
   tag: string | null;
   is_dq: boolean;
   dq_reason?: string | null;
+  scoring_profile: ResultsProfile;
+  ring_values: number[] | null;
+  ring_counts: Record<string, number> | null;
+  hits: number | null;
+  misses: number | null;
+  achieved_points: number;
   match_points: number;
   hit_factor: number | null;
   time: number;
@@ -199,21 +338,34 @@ function buildRow(
   reg: RegistrationRow,
   totals: MatchTotals | undefined,
   targets: TargetTotals | undefined,
+  breakdown: Breakdown | undefined,
+  profile: ResultsProfile,
+  ringValues: number[],
+  matchInfo: MatchInfo | null,
 ): ResultRow {
   const eff = effective(reg);
   const hfTime = totals?.hf_time ?? 0;
+  const achievedPoints = round(totals?.achieved_points ?? 0, 2);
+  const divisionApplies = getDivisionsForMatch(matchInfo).length > 0;
 
   return {
     registration_id: reg.id,
     first_name: reg.first_name,
     last_name: reg.last_name,
-    division: eff.division,
+    division: resolveDivisionForMatch(matchInfo, reg.reg_division ?? reg.division) ?? '',
+    division_applies: divisionApplies,
     category: eff.category,
     power_factor: eff.power_factor,
     tag: reg.tag,
     is_dq: reg.is_dq === 1,
     dq_reason: reg.dq_reason,
-    match_points: round(totals?.match_points ?? 0, 2),
+    scoring_profile: profile,
+    ring_values: profile === 'ring' ? ringValues : null,
+    ring_counts: profile === 'ring' ? (breakdown?.ring_counts ?? {}) : null,
+    hits: profile === 'hit_count' ? (breakdown?.hits ?? 0) : null,
+    misses: profile === 'hit_count' ? (breakdown?.misses ?? 0) : null,
+    achieved_points: achievedPoints,
+    match_points: profile === 'zone' ? round(totals?.match_points ?? 0, 2) : achievedPoints,
     hit_factor: hfTime > 0 ? round((totals?.hf_net_points ?? 0) / hfTime, 4) : null,
     time: round(totals?.total_time ?? 0, 2),
     alpha: targets?.alpha ?? 0,
@@ -232,21 +384,43 @@ function percentAgainstBest(points: number, best: number): number {
 interface MatchContext {
   active: ResultRow[];
   dq: ResultRow[];
+  profile: ResultsProfile;
+  ringValues: number[];
+  divisionApplies: boolean;
+  matchInfo: MatchInfo | null;
 }
 
 async function loadContext(matchId: string): Promise<MatchContext> {
-  const [registrations, scores, targetTotals] = await Promise.all([
+  const [registrations, scores, targetTotals, targetRows, matchInfo, stages] = await Promise.all([
     loadRegistrations(matchId),
     loadScores(matchId),
     loadTargetTotals(matchId),
+    loadMatchTargetRows(matchId),
+    loadMatchInfo(matchId),
+    loadStageRows(matchId),
   ]);
 
+  const stagesForProfile = stages.map((stage) => ({
+    scoring_type: stage.scoring_type,
+    config: parseJson(stage.config, {}),
+  }));
+  const profile = matchResultsProfile(stagesForProfile);
+  const ringValues = matchRingValues(stagesForProfile);
+  const breakdown = buildBreakdown(scores as ScoreBreakdownRow[], targetRows);
   const totalsByReg = aggregateTotals(scores);
   const active: ResultRow[] = [];
   const dq: ResultRow[] = [];
 
   for (const reg of registrations) {
-    const row = buildRow(reg, totalsByReg.get(reg.id), targetTotals.get(reg.id));
+    const row = buildRow(
+      reg,
+      totalsByReg.get(reg.id),
+      targetTotals.get(reg.id),
+      breakdown.get(reg.id),
+      profile,
+      ringValues,
+      matchInfo,
+    );
     if (row.is_dq) dq.push(row);
     else active.push(row);
   }
@@ -254,7 +428,14 @@ async function loadContext(matchId: string): Promise<MatchContext> {
   active.sort((a, b) => b.match_points - a.match_points);
   dq.sort((a, b) => a.last_name.localeCompare(b.last_name) || a.first_name.localeCompare(b.first_name));
 
-  return { active, dq };
+  return {
+    active,
+    dq,
+    profile,
+    ringValues,
+    divisionApplies: getDivisionsForMatch(matchInfo).length > 0,
+    matchInfo,
+  };
 }
 
 function withPositions(rows: ResultRow[]) {
@@ -270,18 +451,18 @@ function dqRows(rows: ResultRow[]) {
   return rows.map((row) => ({ ...row, match_percent: 0 }));
 }
 
-function groupByDivision(rows: ResultRow[]): Record<string, ResultRow[]> {
+function groupByDivision(rows: ResultRow[], divisionApplies: boolean): Record<string, ResultRow[]> {
   const groups: Record<string, ResultRow[]> = {};
   for (const row of rows) {
-    const key = row.division || 'unknown';
+    const key = divisionApplies ? (row.division || 'unknown') : 'all';
     (groups[key] ||= []).push(row);
   }
   return groups;
 }
 
-function groupedWithPositions(rows: ResultRow[]) {
+function groupedWithPositions(rows: ResultRow[], divisionApplies: boolean) {
   const out: Record<string, any[]> = {};
-  for (const [division, group] of Object.entries(groupByDivision(rows))) {
+  for (const [division, group] of Object.entries(groupByDivision(rows, divisionApplies))) {
     out[division] = withPositions(group);
   }
   return out;
@@ -321,62 +502,200 @@ export async function overallResults(matchId: string) {
 }
 
 export async function divisionResults(matchId: string) {
-  const { active, dq } = await loadContext(matchId);
-  return { ...groupedWithPositions(active), dq: dqRows(dq) };
+  const { active, dq, divisionApplies } = await loadContext(matchId);
+  return { ...groupedWithPositions(active, divisionApplies), dq: dqRows(dq) };
 }
 
 export async function categoryResults(matchId: string) {
-  const { active, dq } = await loadContext(matchId);
+  const { active, dq, divisionApplies } = await loadContext(matchId);
   const out: Record<string, Record<string, any[]>> = {};
 
   for (const category of CATEGORIES) {
     const rows = active
       .filter((row) => row.category === category)
-      .sort((a, b) => a.division.localeCompare(b.division) || b.match_points - a.match_points);
+      .sort((a, b) => (
+        divisionApplies
+          ? a.division.localeCompare(b.division) || b.match_points - a.match_points
+          : b.match_points - a.match_points
+      ));
     if (rows.length === 0) continue;
-    out[category] = groupedWithPositions(rows);
+    out[category] = groupedWithPositions(rows, divisionApplies);
   }
 
   return { ...out, dq: dqRows(dq) };
 }
 
 export async function tagResults(matchId: string) {
-  const { active, dq } = await loadContext(matchId);
+  const { active, dq, divisionApplies } = await loadContext(matchId);
   const out: Record<string, Record<string, any[]>> = {};
 
   const tags = [...new Set(active.map((r) => r.tag).filter((t): t is string => !!t))].sort();
   for (const tag of tags) {
     const rows = active
       .filter((row) => row.tag === tag)
-      .sort((a, b) => a.division.localeCompare(b.division) || b.match_points - a.match_points);
-    out[tag] = groupedWithPositions(rows);
+      .sort((a, b) => (
+        divisionApplies
+          ? a.division.localeCompare(b.division) || b.match_points - a.match_points
+          : b.match_points - a.match_points
+      ));
+    out[tag] = groupedWithPositions(rows, divisionApplies);
   }
 
   return { ...out, dq: dqRows(dq) };
 }
 
-export async function singleStageResults(matchId: string, stageId: string) {  const rows = await all<any>(
+interface StageScoreRow {
+  registration_id: string;
+  first_name: string;
+  last_name: string;
+  division: string;
+  category?: string;
+  is_dq: number;
+  dq_reason?: string | null;
+  hit_factor: number | null;
+  net_points: number;
+  stage_percent: number;
+  stage_points: number;
+  time: number | null;
+  procedural_count: number;
+  score_data: string | null;
+  scoring_type: string;
+  config: string | null;
+  alpha?: number;
+  charlie?: number;
+  delta?: number;
+  miss?: number;
+  no_shoot?: number;
+}
+
+function decorateStageRow(
+  row: StageScoreRow,
+  profile: ResultsProfile,
+  ringValues: number[],
+  breakdown: Breakdown | undefined,
+  matchInfo: MatchInfo | null,
+  divisionApplies: boolean,
+) {
+  const netPoints = Number(row.net_points ?? 0);
+  return {
+    ...row,
+    division: resolveDivisionForMatch(matchInfo, row.division) ?? '',
+    division_applies: divisionApplies,
+    scoring_profile: profile,
+    ring_values: profile === 'ring' ? ringValues : null,
+    ring_counts: profile === 'ring' ? (breakdown?.ring_counts ?? {}) : null,
+    hits: profile === 'hit_count' ? (breakdown?.hits ?? 0) : null,
+    misses: profile === 'hit_count' ? (breakdown?.misses ?? 0) : null,
+    achieved_points: netPoints,
+    hit_factor: row.hit_factor != null ? Number(row.hit_factor) : 0,
+    net_points: netPoints,
+    stage_percent: Number(row.stage_percent ?? 0),
+    stage_points: profile === 'zone' ? Number(row.stage_points ?? 0) : netPoints,
+    time: row.time != null ? Number(row.time) : null,
+    procedural_count: Number(row.procedural_count ?? 0),
+    position: 0,
+    division_position: 0,
+  };
+}
+
+function rankStageRows(
+  rows: ReturnType<typeof decorateStageRow>[],
+  profile: ResultsProfile,
+  divisionApplies: boolean,
+) {
+  const groups: Record<string, ReturnType<typeof decorateStageRow>[]> = {};
+  for (const row of rows) {
+    const division = divisionApplies ? (row.division || 'unknown') : 'all';
+    if (!groups[division]) groups[division] = [];
+    groups[division].push(row);
+  }
+
+  const grouped: Record<string, any[]> = {};
+  for (const [division, group] of Object.entries(groups)) {
+    const sorted = [...group].sort((a, b) => (
+      profile === 'zone' ? b.stage_points - a.stage_points : b.net_points - a.net_points
+    ));
+    const best = profile === 'zone'
+      ? sorted[0]?.stage_points ?? 0
+      : sorted[0]?.net_points ?? 0;
+
+    grouped[division] = sorted.map((row, index) => ({
+      ...row,
+      position: index + 1,
+      division_position: index + 1,
+      stage_percent: profile === 'zone'
+        ? row.stage_percent
+        : percentAgainstBest(row.net_points, best),
+    }));
+  }
+
+  // The flat list carries the overall stage position; the grouped rows keep
+  // their per-division position for the division sub-tables.
+  const flat = Object.values(grouped).flat().map((row) => ({ ...row }));
+  flat.sort((a, b) => (
+    profile === 'zone' ? b.stage_points - a.stage_points : b.net_points - a.net_points
+  ));
+  flat.forEach((row, index) => { row.position = index + 1; });
+
+  return { grouped, flat };
+}
+
+async function loadStageBreakdown(stageId: string) {
+  const [scoreRows, targetRows] = await Promise.all([
+    all<ScoreBreakdownRow>(
+      `SELECT ss.registration_id, st.scoring_type, st.config, ss.score_data
+       FROM stage_scores ss
+       JOIN stages st ON st.id = ss.stage_id
+       WHERE ss.stage_id = ?`,
+      [stageId],
+    ),
+    loadStageTargetRows(stageId),
+  ]);
+  return buildBreakdown(scoreRows, targetRows);
+}
+
+export async function singleStageResults(matchId: string, stageId: string) {
+  const [matchInfo, stage] = await Promise.all([
+    loadMatchInfo(matchId),
+    one<StageRow>(
+      `SELECT id, stage_number, name, scoring_type, config
+       FROM stages WHERE id = ? AND match_id = ?`,
+      [stageId, matchId],
+    ),
+  ]);
+  if (!stage) return { results: [], dq: [] };
+
+  const profile = scoringTypeProfile(stage.scoring_type, parseJson(stage.config, {}));
+  const ringValues = ringValuesForStage(stage.scoring_type, parseJson(stage.config, {}));
+  const divisionApplies = getDivisionsForMatch(matchInfo).length > 0;
+  const breakdown = await loadStageBreakdown(stageId);
+
+  const rows = await all<StageScoreRow>(
     `SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent,
-            ss.stage_points, ss.time,
+            ss.stage_points, ss.time, ss.procedural_count, ss.score_data,
+            st.scoring_type, st.config,
             s.first_name, s.last_name,
             COALESCE(mr.division, s.division) AS division,
             COALESCE(mr.category, s.category) AS category,
             mr.is_dq, mr.dq_reason
      FROM stage_scores ss
+     JOIN stages st ON st.id = ss.stage_id
      JOIN match_registrations mr ON mr.id = ss.registration_id
      JOIN shooters s ON s.id = mr.shooter_id
-     WHERE ss.stage_id = ? AND mr.is_dq = 0
-     ORDER BY ss.stage_points DESC`,
+     WHERE ss.stage_id = ? AND mr.is_dq = 0`,
     [stageId],
   );
 
-  const dqScores = await all<any>(
-    `SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.time,
+  const dqScores = await all<StageScoreRow>(
+    `SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent,
+            ss.stage_points, ss.time, ss.procedural_count, ss.score_data,
+            st.scoring_type, st.config,
             s.first_name, s.last_name,
             COALESCE(mr.division, s.division) AS division,
             COALESCE(mr.category, s.category) AS category,
             mr.is_dq, mr.dq_reason
      FROM stage_scores ss
+     JOIN stages st ON st.id = ss.stage_id
      JOIN match_registrations mr ON mr.id = ss.registration_id
      JOIN shooters s ON s.id = mr.shooter_id
      WHERE ss.stage_id = ? AND mr.is_dq = 1
@@ -384,24 +703,39 @@ export async function singleStageResults(matchId: string, stageId: string) {  co
     [stageId],
   );
 
+  const decorated = rows.map((row) => decorateStageRow(
+    row, profile, ringValues, breakdown.get(row.registration_id), matchInfo, divisionApplies,
+  ));
+  const ranked = rankStageRows(decorated, profile, divisionApplies);
+
   return {
-    results: rows.map((row, index) => ({ ...row, position: index + 1 })),
-    dq: dqScores,
+    scoring_profile: profile,
+    ring_values: profile === 'ring' ? ringValues : [],
+    division_applies: divisionApplies,
+    results: ranked.flat,
+    dq: dqScores.map((row) => decorateStageRow(
+      row, profile, ringValues, breakdown.get(row.registration_id), matchInfo, divisionApplies,
+    )),
   };
 }
 
 export async function stageResults(matchId: string) {
-  const stages = await all<{ id: string; stage_number: number; name: string }>(
-    `SELECT id, stage_number, name FROM stages WHERE match_id = ? ORDER BY stage_number`,
-    [matchId],
-  );
-
+  const [matchInfo, stages] = await Promise.all([
+    loadMatchInfo(matchId),
+    loadStageRows(matchId),
+  ]);
+  const divisionApplies = getDivisionsForMatch(matchInfo).length > 0;
   const output: any[] = [];
 
   for (const stage of stages) {
-    const scores = await all<any>(
+    const profile = scoringTypeProfile(stage.scoring_type, parseJson(stage.config, {}));
+    const ringValues = ringValuesForStage(stage.scoring_type, parseJson(stage.config, {}));
+    const breakdown = await loadStageBreakdown(stage.id);
+
+    const scores = await all<StageScoreRow>(
       `SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent,
-              ss.stage_points, ss.time, ss.procedural_count,
+              ss.stage_points, ss.time, ss.procedural_count, ss.score_data,
+              st.scoring_type, st.config,
               s.first_name, s.last_name,
               COALESCE(mr.division, s.division) AS division,
               mr.is_dq,
@@ -411,6 +745,7 @@ export async function stageResults(matchId: string) {
               COALESCE(SUM(ts.miss), 0) + COALESCE(SUM(CASE WHEN ts.target_type = 'steel' AND ts.steel_hit = 0 THEN 1 ELSE 0 END), 0) AS miss,
               COALESCE(SUM(ts.no_shoot_hits), 0) AS no_shoot
        FROM stage_scores ss
+       JOIN stages st ON st.id = ss.stage_id
        JOIN match_registrations mr ON mr.id = ss.registration_id
        JOIN shooters s ON s.id = mr.shooter_id
        LEFT JOIN target_scores ts ON ts.stage_score_id = ss.id
@@ -420,24 +755,20 @@ export async function stageResults(matchId: string) {
       [stage.id],
     );
 
-    const groups = groupByDivision(scores as ResultRow[]);
-    const groupedScores: any[] = [];
-    for (const [, divScores] of Object.entries(groups)) {
-      divScores.forEach((score, index) => {
-        groupedScores.push({ ...score, position: index + 1, division_position: index + 1 });
-      });
-    }
-    groupedScores.sort((a, b) => b.stage_points - a.stage_points);
-    groupedScores.forEach((score, index) => {
-      score.position = index + 1;
-    });
+    const decorated = scores.map((row) => decorateStageRow(
+      row, profile, ringValues, breakdown.get(row.registration_id), matchInfo, divisionApplies,
+    ));
+    const ranked = rankStageRows(decorated, profile, divisionApplies);
 
-    const dqScores = await all<any>(
-      `SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.time, ss.procedural_count,
+    const dqScores = await all<StageScoreRow>(
+      `SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent,
+              ss.stage_points, ss.time, ss.procedural_count, ss.score_data,
+              st.scoring_type, st.config,
               s.first_name, s.last_name,
               COALESCE(mr.division, s.division) AS division,
               mr.is_dq, mr.dq_reason
        FROM stage_scores ss
+       JOIN stages st ON st.id = ss.stage_id
        JOIN match_registrations mr ON mr.id = ss.registration_id
        JOIN shooters s ON s.id = mr.shooter_id
        WHERE ss.stage_id = ? AND mr.is_dq = 1
@@ -449,14 +780,14 @@ export async function stageResults(matchId: string) {
       stage_id: stage.id,
       stage_number: stage.stage_number,
       stage_name: stage.name,
-      scores: groupedScores,
-      dq_scores: dqScores,
-      divisions: Object.fromEntries(
-        Object.entries(groups).map(([division, divScores]) => [
-          division,
-          divScores.map((score, index) => ({ ...score, position: index + 1 })),
-        ]),
-      ),
+      scoring_profile: profile,
+      ring_values: profile === 'ring' ? ringValues : [],
+      division_applies: divisionApplies,
+      scores: ranked.flat,
+      dq_scores: dqScores.map((row) => decorateStageRow(
+        row, profile, ringValues, breakdown.get(row.registration_id), matchInfo, divisionApplies,
+      )),
+      divisions: ranked.grouped,
     });
   }
 
@@ -480,10 +811,12 @@ export async function shooterStageSummaries(matchId: string, registrationId: str
   );
   if (!reg) throw new Error('Registration not found');
 
+  const matchInfo = await loadMatchInfo(matchId);
   const registration = {
     first_name: reg.first_name,
     last_name: reg.last_name,
-    division: reg.reg_division || reg.shooter_division,
+    division: resolveDivisionForMatch(matchInfo, reg.reg_division ?? reg.shooter_division) ?? '',
+    division_applies: getDivisionsForMatch(matchInfo).length > 0,
     category: reg.reg_category || reg.shooter_category,
     power_factor: reg.reg_power_factor || reg.shooter_power_factor,
     is_dq: reg.is_dq === 1,

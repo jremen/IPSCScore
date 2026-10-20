@@ -132,6 +132,7 @@ export interface ShooterStageSummariesResponse {
     first_name: string;
     last_name: string;
     division: string;
+    division_applies?: boolean;
     category: string;
     power_factor: string;
     is_dq: boolean;

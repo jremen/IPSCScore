@@ -24,13 +24,15 @@ interface ShooterFormFieldsProps {
   onSquadChange?: (squad: string) => void;
   /** Organization to filter divisions by (e.g. 'IPSC', 'USPSA') */
   organization?: string;
+  /** Hide the division selector for sports that do not use divisions (archery). */
+  showDivision?: boolean;
   /** Firearm type to filter divisions by (e.g. 'rifle', 'shotgun').
    *  Takes precedence over `organization` for IPSC Rifle/Shotgun matches. */
   firearmType?: string;
 }
 
 /** Shared shooter form fields — used by both MatchRegistration and ShooterDatabase */
-export default function ShooterFormFields({ form, onChange, showTagAndEmail = true, showSquad = false, squad, onSquadChange, organization, firearmType }: ShooterFormFieldsProps) {
+export default function ShooterFormFields({ form, onChange, showTagAndEmail = true, showSquad = false, squad, onSquadChange, showDivision = true, organization, firearmType }: ShooterFormFieldsProps) {
   const { t } = useTranslation();
   // Use the firearm-aware helper when a firearm_type is known. Fall back to the
   // org-only filter when only organization is known (legacy caller path).
@@ -60,18 +62,20 @@ export default function ShooterFormFields({ form, onChange, showTagAndEmail = tr
             {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{t(c.i18nKey)}</option>)}
           </Select>
         </div>
-        <div>
-          <Label>{t('shooters.division')}</Label>
-          <Select value={form.division} onChange={(e) => onChange({ ...form, division: e.target.value as Division })}>
-            {groupedDivisions
-              ? groupedDivisions.map((g) => (
-                <optgroup key={g.group} className="dark:text-white" label={g.group}>
-                  {g.divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                </optgroup>
-              ))
-              : divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-          </Select>
-        </div>
+        {showDivision && (
+          <div>
+            <Label>{t('shooters.division')}</Label>
+            <Select value={form.division} onChange={(e) => onChange({ ...form, division: e.target.value as Division })}>
+              {groupedDivisions
+                ? groupedDivisions.map((g) => (
+                  <optgroup key={g.group} className="dark:text-white" label={g.group}>
+                    {g.divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                  </optgroup>
+                ))
+                : divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </Select>
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>

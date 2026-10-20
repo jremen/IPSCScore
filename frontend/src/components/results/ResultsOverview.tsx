@@ -3,25 +3,23 @@ import { useTranslation } from 'react-i18next';
 import { useUIStore } from '../../stores/uiStore';
 import { useMatchStore } from '../../stores/matchStore';
 import { useResultsStore } from '../../stores/resultsStore';
-import { divisionLabel } from '../../utils/constants';
+import { divisionLabel, getDivisionsForMatch } from '../../utils/constants';
 import { useConstLabels } from '../../hooks/useConstLabels';
 import ExportButtons from './ExportButtons';
-import ResultsTable, { type ColumnKey } from './ResultsTable';
+import ResultsTable from './ResultsTable';
 import { hasHitFactor } from '../../utils/hitFactor';
+import {
+  divisionAppliesForRows,
+  resultColumns,
+  resultsProfileOfRows,
+  ringValuesOfRows,
+} from '../../utils/resultsProfile';
 import ShooterSummaryView from './ShooterSummaryModal';
 import type { DqShooter } from '../../stores/resultsStore';
 import { twMerge } from "tailwind-merge";
 import { useMatchProgress } from "../../hooks/useMatchProgress";
 
 type ResultTab = 'byDivision' | 'overall' | 'byStage' | 'byCategory' | 'byTag';
-
-const DIVISION_COLUMNS: ColumnKey[] = ['position', 'shooter', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'hitFactor', 'matchPoints'];
-const OVERALL_COLUMNS: ColumnKey[] = ['position', 'shooter', 'division', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'matchPercent', 'hitFactor', 'matchPoints'];
-const STAGE_COLUMNS: ColumnKey[] = ['position', 'shooter', 'time', 'alpha', 'charlie', 'delta', 'miss', 'noShootHits', 'procedurals', 'stagePercent', 'stagePoints', 'hitFactor', 'netPoints'];
-
-function matchColumns(columns: ColumnKey[], hasHf: boolean): ColumnKey[] {
-  return hasHf ? columns : columns.filter((col) => col !== 'hitFactor');
-}
 
 const TABS: { key: ResultTab; labelKey: string }[] = [
   { key: 'byDivision', labelKey: 'results.byDivision' },
@@ -101,7 +99,14 @@ function DivisionContent({ divisionResults, dqDivisions, loading, onShooterClick
 
   const scoredData = useMemo(() => progressData.scored != null ? {scored: progressData.scored, stagesLength: progressData.stagesLength} : undefined, [progressData.scored, progressData.stagesLength]);
 
-  const columns = matchColumns(DIVISION_COLUMNS, Object.values(divisionResults).some(hasHitFactor));
+  const allRows = Object.values(divisionResults).flat();
+  const profile = resultsProfileOfRows(allRows);
+  const divisionApplies = divisionAppliesForRows(allRows, divisionAppliesForRows(dqDivisions));
+  const columns = resultColumns(profile, {
+    division: false,
+    hasHitFactor: profile === 'zone' && allRows.some(hasHitFactor),
+    ringValues: ringValuesOfRows(allRows),
+  });
 
     useEffect(() => {
       if (!runningMatchId) return;
@@ -120,11 +125,13 @@ function DivisionContent({ divisionResults, dqDivisions, loading, onShooterClick
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([division, results]) => (
           <div key={division} className="division-results-section mb-6">
-            <h3 className="font-semibold text-lg mb-2 dark:text-white">{divisionLabel(division)}</h3>
+            {divisionApplies && (
+              <h3 className="font-semibold text-lg mb-2 dark:text-white">{divisionLabel(division)}</h3>
+            )}
             <ResultsTable scored={scoredData} results={results as any[]} columns={columns} onShooterClick={onShooterClick} />
           </div>
         ))}
-      <DqTable dqShooters={dqDivisions} />
+      <DqTable dqShooters={dqDivisions} showDivision={divisionApplies} />
     </>
   );
 }
@@ -136,13 +143,19 @@ function OverallContent({ overallResults, dqOverall, onShooterClick }: {
 }) {
   const { t } = useTranslation();
 
-  const columns = matchColumns(OVERALL_COLUMNS, hasHitFactor(overallResults));
+  const profile = resultsProfileOfRows(overallResults);
+  const divisionApplies = divisionAppliesForRows(overallResults, divisionAppliesForRows(dqOverall));
+  const columns = resultColumns(profile, {
+    division: divisionApplies,
+    hasHitFactor: profile === 'zone' && hasHitFactor(overallResults),
+    ringValues: ringValuesOfRows(overallResults),
+  });
 
   return (
     <>
       <h2 className="print-only hidden text-lg font-bold mb-2">{t('results.overall')}</h2>
       <ResultsTable results={overallResults as any[]} columns={columns} onShooterClick={onShooterClick} />
-      <DqTable dqShooters={dqOverall} />
+      <DqTable dqShooters={dqOverall} showDivision={divisionApplies} />
     </>
   );
 }
@@ -150,12 +163,25 @@ function OverallContent({ overallResults, dqOverall, onShooterClick }: {
 function StageContent({ stageResults, onShooterClick }: { stageResults: any[]; onShooterClick?: (registrationId: string) => void; }) {
   const { t } = useTranslation();
 
-  const stageColumns = STAGE_COLUMNS;
-
   return (
     <>
       <h2 className="print-only hidden text-lg font-bold mb-2">{t('results.byStage')}</h2>
-      {stageResults.map((stage: any) => (
+      {stageResults.map((stage: any) => {
+        const stageProfile = (stage.scoring_profile as ReturnType<typeof resultsProfileOfRows>) || resultsProfileOfRows(stage.scores);
+        const stageDivisionApplies = typeof stage.division_applies === 'boolean'
+          ? stage.division_applies
+          : divisionAppliesForRows(stage.scores);
+        const stageRingValues = Array.isArray(stage.ring_values) && stage.ring_values.length > 0
+          ? stage.ring_values as number[]
+          : ringValuesOfRows(stage.scores);
+        const columnsFor = (scores: any[], includeDivision: boolean) => resultColumns(stageProfile, {
+          stage: true,
+          division: includeDivision,
+          hasHitFactor: stageProfile === 'zone' && scores.some(hasHitFactor),
+          ringValues: stageRingValues,
+        });
+
+        return (
         <div key={stage.stage_id} className="mb-6 division-results-section">
           <h3 className="font-semibold mb-2 dark:text-white">{t('scoring.stage', { number: stage.stage_number })}: {stage.stage_name}</h3>
           {stage.divisions && Object.keys(stage.divisions).length > 0 ? (
@@ -163,12 +189,14 @@ function StageContent({ stageResults, onShooterClick }: { stageResults: any[]; o
               .sort(([a], [b]) => a.localeCompare(b))
               .map(([division, scores]) => (
                 <div key={division} className="division-results-section mb-4 ml-2">
-                  <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
-                  <ResultsTable results={scores as any[]} columns={stageColumns} onShooterClick={onShooterClick} />
+                  {stageDivisionApplies && (
+                    <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
+                  )}
+                  <ResultsTable results={scores as any[]} columns={columnsFor(scores, false)} onShooterClick={onShooterClick} />
                 </div>
               ))
           ) : (
-            <ResultsTable results={stage.scores as any[]} columns={['position', 'shooter', 'division', ...stageColumns]} onShooterClick={onShooterClick} />
+            <ResultsTable results={stage.scores as any[]} columns={columnsFor(stage.scores || [], stageDivisionApplies)} onShooterClick={onShooterClick} />
           )}
           {stage.dq_scores && stage.dq_scores.length > 0 && (
             <div className="mt-2 border border-red-300 rounded-lg overflow-hidden">
@@ -181,9 +209,13 @@ function StageContent({ stageResults, onShooterClick }: { stageResults: any[]; o
                   <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
                       <th className="px-3 py-1 text-left dark:text-gray-300">{t('results.shooter')}</th>
-                      <th className="px-3 py-1 text-left dark:text-gray-300">{t('results.division')}</th>
-                      <th className="px-3 py-1 text-right dark:text-gray-300">HF</th>
-                      <th className="px-3 py-1 text-right dark:text-gray-300">{t('results.netPoints')}</th>
+                      {stageDivisionApplies && <th className="px-3 py-1 text-left dark:text-gray-300">{t('results.division')}</th>}
+                      {stageProfile === 'zone' && (
+                        <>
+                          <th className="px-3 py-1 text-right dark:text-gray-300">HF</th>
+                          <th className="px-3 py-1 text-right dark:text-gray-300">{t('results.netPoints')}</th>
+                        </>
+                      )}
                       <th className="px-3 py-1 text-left dark:text-gray-300">{t('results.dqReason')}</th>
                     </tr>
                   </thead>
@@ -191,9 +223,13 @@ function StageContent({ stageResults, onShooterClick }: { stageResults: any[]; o
                     {stage.dq_scores.map((s: any) => (
                       <tr key={s.registration_id} className="bg-red-50 dark:bg-red-900/10">
                         <td className="px-3 py-1 dark:text-white">{s.first_name} {s.last_name}</td>
-                        <td className="px-3 py-1 dark:text-white">{divisionLabel(s.division)}</td>
-                        <td className="px-3 py-1 text-right dark:text-white">{s.hit_factor?.toFixed(4)}</td>
-                        <td className="px-3 py-1 text-right dark:text-white">{s.net_points?.toFixed(2)}</td>
+                        {stageDivisionApplies && <td className="px-3 py-1 dark:text-white">{divisionLabel(s.division)}</td>}
+                        {stageProfile === 'zone' && (
+                          <>
+                            <td className="px-3 py-1 text-right dark:text-white">{s.hit_factor?.toFixed(4)}</td>
+                            <td className="px-3 py-1 text-right dark:text-white">{s.net_points?.toFixed(2)}</td>
+                          </>
+                        )}
                         <td className="px-3 py-1 text-red-600 dark:text-red-400">{s.dq_reason || 'DQ'}</td>
                       </tr>
                     ))}
@@ -206,18 +242,24 @@ function StageContent({ stageResults, onShooterClick }: { stageResults: any[]; o
                   <div key={s.registration_id} className="px-3 py-2.5 bg-red-50 dark:bg-red-900/10">
                     <div className="font-medium dark:text-white">{s.first_name} {s.last_name}</div>
                     <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 text-sm">
-                      <span>
-                        <span className="text-gray-500 dark:text-gray-400 text-xs">{t('results.division')}</span>{' '}
-                        <span className="dark:text-white">{divisionLabel(s.division)}</span>
-                      </span>
-                      <span>
-                        <span className="text-gray-500 dark:text-gray-400 text-xs">HF</span>{' '}
-                        <span className="font-mono dark:text-white">{s.hit_factor?.toFixed(4)}</span>
-                      </span>
-                      <span>
-                        <span className="text-gray-500 dark:text-gray-400 text-xs">{t('results.netPoints')}</span>{' '}
-                        <span className="font-mono dark:text-white">{s.net_points?.toFixed(2)}</span>
-                      </span>
+                      {stageDivisionApplies && (
+                        <span>
+                          <span className="text-gray-500 dark:text-gray-400 text-xs">{t('results.division')}</span>{' '}
+                          <span className="dark:text-white">{divisionLabel(s.division)}</span>
+                        </span>
+                      )}
+                      {stageProfile === 'zone' && (
+                        <>
+                          <span>
+                            <span className="text-gray-500 dark:text-gray-400 text-xs">HF</span>{' '}
+                            <span className="font-mono dark:text-white">{s.hit_factor?.toFixed(4)}</span>
+                          </span>
+                          <span>
+                            <span className="text-gray-500 dark:text-gray-400 text-xs">{t('results.netPoints')}</span>{' '}
+                            <span className="font-mono dark:text-white">{s.net_points?.toFixed(2)}</span>
+                          </span>
+                        </>
+                      )}
                       <span>
                         <span className="text-gray-500 dark:text-gray-400 text-xs">{t('results.dqReason')}</span>{' '}
                         <span className="text-red-600 dark:text-red-400">{s.dq_reason || 'DQ'}</span>
@@ -229,7 +271,8 @@ function StageContent({ stageResults, onShooterClick }: { stageResults: any[]; o
             </div>
           )}
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -240,26 +283,40 @@ function CategoryContent({ categoryResults, dqCategories }: {
 }) {
   const { t } = useTranslation();
   const { categoryLabel } = useConstLabels();
-
-  const columns = matchColumns(DIVISION_COLUMNS, Object.values(categoryResults).some((divisions) => Object.values(divisions as Record<string, any[]>).some(hasHitFactor)));
+  const categoryRows = Object.values(categoryResults).flatMap(
+    (divisions) => Object.values(divisions as Record<string, any[]>).flat(),
+  );
+  const dqShowDivision = divisionAppliesForRows(categoryRows, divisionAppliesForRows(dqCategories));
 
   return (
     <>
       <h2 className="print-only hidden text-lg font-bold mb-2">{t('results.byCategory')}</h2>
-      {Object.entries(categoryResults).map(([cat, divisions]) => (
+      {Object.entries(categoryResults).map(([cat, divisions]) => {
+        const rows = Object.values(divisions as Record<string, any[]>).flat();
+        const profile = resultsProfileOfRows(rows);
+        const divisionApplies = divisionAppliesForRows(rows, dqShowDivision);
+        const columns = resultColumns(profile, {
+          division: false,
+          hasHitFactor: profile === 'zone' && rows.some(hasHitFactor),
+          ringValues: ringValuesOfRows(rows),
+        });
+        return (
         <div key={cat} className="mb-6 division-results-section">
           <h3 className="font-semibold text-lg mb-2 dark:text-white">{categoryLabel(cat)}</h3>
           {Object.entries(divisions as Record<string, any[]>)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([division, results]) => (
               <div key={division} className="mb-4 ml-2">
-                <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
+                {divisionApplies && (
+                  <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
+                )}
                 <ResultsTable results={results as any[]} columns={columns} />
               </div>
             ))}
         </div>
-      ))}
-      <DqTable dqShooters={dqCategories} />
+        );
+      })}
+      <DqTable dqShooters={dqCategories} showDivision={dqShowDivision} />
     </>
   );
 }
@@ -269,32 +326,49 @@ function TagContent({ tagResults, dqTags }: {
   dqTags: DqShooter[];
 }) {
   const { t } = useTranslation();
-
-  const columns = matchColumns(DIVISION_COLUMNS, Object.values(tagResults).some((divisions) => Object.values(divisions as Record<string, any[]>).some(hasHitFactor)));
+  const allTagRows = Object.values(tagResults).flatMap(
+    (divisions) => Object.values(divisions as Record<string, any[]>).flat(),
+  );
+  const dqShowDivision = divisionAppliesForRows(allTagRows, divisionAppliesForRows(dqTags));
 
   return (
     <>
       <h2 className="print-only hidden text-lg font-bold mb-2">{t('results.byTag')}</h2>
-      {Object.entries(tagResults).map(([tag, divisions]) => (
+      {Object.entries(tagResults).map(([tag, divisions]) => {
+        const tagRows = Object.values(divisions as Record<string, any[]>).flat();
+        const profile = resultsProfileOfRows(tagRows);
+        const divisionApplies = divisionAppliesForRows(tagRows, dqShowDivision);
+        const columns = resultColumns(profile, {
+          division: false,
+          hasHitFactor: profile === 'zone' && tagRows.some(hasHitFactor),
+          ringValues: ringValuesOfRows(tagRows),
+        });
+        return (
         <div key={tag} className="mb-6 division-results-section">
           <h3 className="font-semibold text-lg mb-2 dark:text-white">{t('results.tag', { tag })}</h3>
           {Object.entries(divisions as Record<string, any[]>)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([division, results]) => (
               <div key={division} className="mb-4 ml-2">
-                <h4 className="font-medium text-sm text-gray-600 dark:bg-gray-400 mb-1">{divisionLabel(division)}</h4>
+                {divisionApplies && (
+                  <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
+                )}
                 <ResultsTable results={results as any[]} columns={columns} />
               </div>
             ))}
         </div>
-      ))}
+        );
+      })}
       {Object.keys(tagResults).length === 0 && <p className="text-gray-500 text-center">{t('results.noTags')}</p>}
-      <DqTable dqShooters={dqTags} />
+      <DqTable dqShooters={dqTags} showDivision={dqShowDivision} />
     </>
   );
 }
 
-export default function ResultsOverview({isPublic}:{isPublic?:true}) {
+export default function ResultsOverview({isPublic, matchOverride}:{
+  isPublic?: true;
+  matchOverride?: { organization?: string; firearm_type?: string; name?: string; date?: string } | null;
+}) {
   const activeMatchId = useUIStore((s) => s.activeMatchId);
   const matches = useMatchStore((s) => s.matches);
   const overallResults = useResultsStore((s) => s.overallResults);
@@ -320,7 +394,18 @@ export default function ResultsOverview({isPublic}:{isPublic?:true}) {
   const [activeTab, setActiveTab] = useState<ResultTab>('byDivision');
   const [selectedRegistrationId, setSelectedRegistrationId] = useState<string | null>(null);
 
-  const activeMatch = matches?.find((m: any) => m.id === activeMatchId);
+  const activeMatch = matches?.find((m: any) => m.id === activeMatchId) ?? matchOverride ?? undefined;
+  const divisionsApply = activeMatch ? getDivisionsForMatch(activeMatch).length > 0 : true;
+  const visibleTabs = divisionsApply ? TABS : TABS.filter((tab) => tab.key !== 'byDivision');
+  // Avoid a one-frame empty view when the match has no divisions but the
+  // state still holds the previous default tab.
+  const effectiveTab: ResultTab = activeTab === 'byDivision' && !divisionsApply ? 'overall' : activeTab;
+
+  useEffect(() => {
+    if (!divisionsApply && activeTab === 'byDivision') {
+      setActiveTab('overall');
+    }
+  }, [divisionsApply, activeTab]);
 
   useEffect(() => {
     if (activeMatchId) {
@@ -362,19 +447,19 @@ export default function ResultsOverview({isPublic}:{isPublic?:true}) {
       <div className={twMerge("sticky before:bg-gray-200 eink:before:bg-white pb-3 dark:before:bg-gray-900 before:absolute before:h-4 before:-top-4 before:w-full  bg-gray-200 dark:bg-gray-900 z-100", isPublic ? "top-19.5" : "top-4")}>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <h2 className="text-xl font-bold dark:text-white">{t('results.title')}</h2>
-          <ExportButtons activeTab={activeTab} />
+          <ExportButtons activeTab={effectiveTab} />
         </div>
 
         {/* Tab bar (replaces Flowbite Tabs for sticky layout) */}
         <div className="flex flex-wrap gap-x-1 border-b border-gray-200 dark:border-gray-700 -mb-px" role="tablist">
-          {TABS.map(({ key, labelKey }) => (
+          {visibleTabs.map(({ key, labelKey }) => (
             <button
               key={key}
               role="tab"
-              aria-selected={activeTab === key}
+              aria-selected={effectiveTab === key}
               onClick={() => setActiveTab(key)}
               className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                activeTab === key
+                effectiveTab === key
                   ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500'
                   : 'cursor-pointer border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
               }`}
@@ -395,19 +480,19 @@ export default function ResultsOverview({isPublic}:{isPublic?:true}) {
           />
         ) : (
           <>
-            {activeTab === 'byDivision' && (
+            {effectiveTab === 'byDivision' && divisionsApply && (
               <DivisionContent divisionResults={divisionResults} dqDivisions={dqDivisions} loading={loading} onShooterClick={handleShooterClick} />
             )}
-            {activeTab === 'overall' && (
+            {effectiveTab === 'overall' && (
               <OverallContent overallResults={overallResults} dqOverall={dqOverall} onShooterClick={handleShooterClick} />
             )}
-            {activeTab === 'byStage' && (
+            {effectiveTab === 'byStage' && (
               <StageContent stageResults={stageResults} onShooterClick={handleShooterClick} />
             )}
-            {activeTab === 'byCategory' && (
+            {effectiveTab === 'byCategory' && (
               <CategoryContent categoryResults={categoryResults} dqCategories={dqCategories} />
             )}
-            {activeTab === 'byTag' && (
+            {effectiveTab === 'byTag' && (
               <TagContent tagResults={tagResults} dqTags={dqTags} />
             )}
           </>
