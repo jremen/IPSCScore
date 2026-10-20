@@ -6,6 +6,7 @@ import { useEscClose } from '../../hooks/useEscClose';
 import { api } from '../../services/api';
 import { useUIStore } from '../../stores/uiStore';
 import { useMatchStore } from '../../stores/matchStore';
+import { isLocalRuntime } from '../../services/data/platform';
 import FileDropzone from './FileDropzone';
 
 type TabType = 'json' | 'winmss' | 'psc';
@@ -30,6 +31,9 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
   const addToast = useUIStore((s) => s.addToast);
   const fetchMatches = useMatchStore((s) => s.fetchMatches);
   const { importing, handleImport } = useMatchExport();
+  // WinMSS and Practiscore parsers need the Node backend. The standalone
+  // Android/iOS builds only import the native IPSCScore JSON format.
+  const local = isLocalRuntime();
 
   const [activeTab, setActiveTab] = useState<TabType>('json');
 
@@ -51,11 +55,15 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
 
   // ── Tab detection ──
   const detectTab = useCallback((filename: string) => {
+    if (local) {
+      setActiveTab('json');
+      return;
+    }
     const lower = filename.toLowerCase();
     if (lower.endsWith('.mdb') || lower.endsWith('.accdb')) setActiveTab('winmss');
     else if (lower.endsWith('.psc')) setActiveTab('psc');
     else setActiveTab('json');
-  }, []);
+  }, [local]);
 
   // ── JSON tab handlers ──
   const handleJsonConfirm = async () => {
@@ -152,18 +160,20 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
     <Modal show={show} onClose={handleClose} size="xl" className="dark:text-white">
       <ModalHeader>{t('matches.importMatch')}</ModalHeader>
       <ModalBody>
-        {/* ── Tab bar ── */}
-        <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-700">
-          <button className={tabClass('json')} onClick={() => setActiveTab('json')}>
-            IPSCScore JSON
-          </button>
-          <button className={tabClass('winmss')} onClick={() => setActiveTab('winmss')}>
-            {t('import.winMss.title')}
-          </button>
-          <button className={tabClass('psc')} onClick={() => setActiveTab('psc')}>
-            Practiscore (.psc)
-          </button>
-        </div>
+        {/* ── Tab bar (server-side formats are hidden on mobile) ── */}
+        {!local && (
+          <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-700">
+            <button className={tabClass('json')} onClick={() => setActiveTab('json')}>
+              IPSCScore JSON
+            </button>
+            <button className={tabClass('winmss')} onClick={() => setActiveTab('winmss')}>
+              {t('import.winMss.title')}
+            </button>
+            <button className={tabClass('psc')} onClick={() => setActiveTab('psc')}>
+              Practiscore (.psc)
+            </button>
+          </div>
+        )}
 
         {/* ── JSON tab ── */}
         {activeTab === 'json' && (

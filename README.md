@@ -388,9 +388,12 @@ Gradle dependencies.
 **Step-by-step build and device-install guide (USB, Wi-Fi, release signing):
 [`mobile/README.md`](mobile/README.md).**
 
-Not yet implemented on Android: WinMSS/CSV import, match export, backup/restore,
-cups, and stage images. Full details, the PostgreSQL→SQLite mapping and the
-remaining work are in [`docs/android.md`](docs/android.md).
+Matches can be moved between the desktop/web app and a phone as `.match.json`
+(on-device import/export), and **Settings → Database** exports or restores a full
+JSON backup of the device data without a computer. Not yet implemented on
+Android: WinMSS/CSV/PSC import, PSC export, cups, and stage images. Full details,
+the PostgreSQL→SQLite mapping and the remaining work are in
+[`docs/android.md`](docs/android.md).
 
 ---
 
@@ -419,8 +422,10 @@ distribution for club devices with a one-year lifetime.
 **Step-by-step build, signing and device-install guide (simulator, free Apple
 Account, Ad Hoc, troubleshooting): [`mobile/README-ios.md`](mobile/README-ios.md).**
 
-Feature coverage matches the Android app — including its current gaps (import,
-backup/restore, cups, stage images). See [`docs/android.md`](docs/android.md).
+Feature coverage matches the Android app, including `.match.json` import/export
+and full JSON backup/restore through the Files app. The remaining gaps are
+WinMSS/CSV/PSC import, PSC export, cups and stage images. See
+[`docs/android.md`](docs/android.md).
 
 ---
 

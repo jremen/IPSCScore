@@ -6,6 +6,7 @@ import { api } from '../../services/api';
 import CSVImportModal from './CSVImportModal';
 import { TbFileImport, TbFileExport } from 'react-icons/tb';
 import { onMenuAction } from '../../hooks/useMenuActions';
+import { isLocalRuntime } from '../../services/data/platform';
 
 interface Props {
   type: 'shooters' | 'registrations' | 'scores';
@@ -18,17 +19,21 @@ export default function CSVImportExport({ type, matchId, onImportComplete }: Pro
   const addToast = useUIStore((s) => s.addToast);
   const [show, setShow] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // CSV parsing lives in the backend. The standalone Android/iOS builds have no
+  // server, so the import/export buttons are not offered there at all.
+  const local = isLocalRuntime();
 
   const label = t('common.import');
 
   useEffect(() => {
+    if (local) return;
     const action = type === 'shooters' ? 'import-shooters-csv' : type === 'registrations' ? 'import-registrations-csv' : null;
     if (!action) return;
     return onMenuAction(action, () => {
       if (type === 'registrations' && !matchId) return;
       setShow(true);
     });
-  }, [type, matchId]);
+  }, [type, matchId, local]);
 
   const handleExportShooters = async () => {
     setExporting(true);
@@ -68,6 +73,8 @@ export default function CSVImportExport({ type, matchId, onImportComplete }: Pro
       setExporting(false);
     }
   };
+
+  if (local) return null;
 
   return (
     <>

@@ -382,12 +382,16 @@ adb shell dumpsys package com.ipscscore.app | grep versionName
 
 ## Feature coverage
 
-Everything runs on-device with a local SQLite database. The following capabilities are
-**not yet implemented** on Android and raise `LocalFeatureUnavailableError` when used:
+Everything runs on-device with a local SQLite database. Supported offline:
 
-- match export, PSC export/import, match import
-- WinMSS / CSV import and export
-- backup / restore and local-folder backup
+- `.match.json` match import/export (same format as the desktop/web app)
+- full JSON backup/restore of the device database (**Settings → Database**)
+
+The following capabilities are **not implemented** on Android; their controls are
+hidden and the matching `client.ts` methods raise `LocalFeatureUnavailableError`:
+
+- WinMSS import, CSV import/export, Practiscore `.psc` import/export
+- local-folder automatic backup (Electron only)
 - cups, stage image upload/removal, audit log
 
 Also note that diacritic-insensitive shooter search is unavailable locally (SQLite has no

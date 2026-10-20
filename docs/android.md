@@ -123,7 +123,8 @@ device **is** the authority.
 
 ## Exporting files
 
-Every PDF/CSV/HTML export funnels through `frontend/src/utils/exportUtils.ts`:
+Every PDF/CSV/HTML export, `.match.json` file and JSON backup funnels through
+`frontend/src/utils/exportUtils.ts`:
 
 | Runtime | Save path |
 |---|---|
@@ -225,6 +226,11 @@ Fully local, offline, no computer required:
 - hit-factor, net-points and time-based stage ranking, per division
 - overall / division / stage / category / tag results and shooter scorecards
 - PDF / CSV / HTML export straight to `Documents/IPSCScore/`
+- **match JSON import/export** — the same `.match.json` format as the desktop/web
+  app, with IDs preserved so a file can move in either direction
+- **full JSON backup/restore** — every local table (settings, matches, shooters,
+  scores, cups) written as one portable document and restored atomically in a
+  single SQLite transaction
 - admin password + login
 
 ## Remaining work
@@ -232,12 +238,10 @@ Fully local, offline, no computer required:
 Declared in `client.ts` and currently throwing
 `LocalFeatureUnavailableError`:
 
-- **Import/export**: match JSON + PSC export, WinMSS import, CSV import/export.
-  These need the server-side parsers (`csv-parse`, the WinMSS reader) moved into
-  a shared package. The neutral JSON format already exists in
-  `backend/src/services/localBackup.ts` and is the intended backup format.
-- **Backup/restore**: a full JSON export/import inside one SQLite transaction,
-  using `@capacitor/filesystem` + `@capacitor/share`.
+- **Server-side formats**: WinMSS import, CSV import/export, PSC import/export.
+  These need the server-side parsers (`csv-parse`, the WinMSS reader, the PSC ZIP
+  reader) moved into a shared package. Their controls are hidden on mobile so
+  the UI never offers a button that cannot work.
 - **Cups**: aggregation across matches; pure read logic, straightforward to port
   onto `results.ts`.
 - **Stage images**: needs `@capacitor/filesystem` instead of the multer upload.
