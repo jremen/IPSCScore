@@ -1,0 +1,16 @@
+# Local signed macOS build — `npm run build:mac:signed`.
+#
+# Signs with the certificate already in the login keychain, normally an
+# "Apple Development: …" certificate, using electron-builder's development
+# signing mode. Timestamping and the hardened runtime are disabled because
+# they only matter for a Developer ID build that will be notarized.
+#
+# This is NOT a distributable build. For release signing, install a
+# "Developer ID Application" certificate and override mac.type,
+# mac.timestamp and mac.hardenedRuntime (see docs/releasing.md).
+extends: ./electron-builder.yml
+
+mac:
+  type: development
+  timestamp: none
+  hardenedRuntime: false

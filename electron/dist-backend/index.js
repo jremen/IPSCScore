@@ -16226,6 +16226,99 @@ shooterRoutes.post("/:id/restore", async (c) => {
 
 // ../backend/src/routes/registrations.ts
 init_client();
+
+// ../backend/src/utils/matchDivisions.ts
+var ORGANIZATION_DIVISIONS = {
+  IPSC: ["standard", "open", "production", "production_optics", "optics", "classic", "revolver", "pcc_optics", "pcc_iron", "pistol_trening", "pcc_trening"],
+  USPSA: ["open", "limited", "limited_optics", "carry_optics", "production", "single_stack", "revolver", "pcc_optics", "pcc_iron"],
+  IDPA: ["ssp", "esp", "cdp", "ccp", "bug", "revolver_idpa"],
+  "3GUN": ["tactical", "open_3gun", "heavy"],
+  PRS: ["open_prs", "production_prs"],
+  NRL22: ["any", "irons", "open_22"],
+  NRA: ["conventional", "international"],
+  USA_ARCHERY: [],
+  ISSF: []
+};
+var FIREARM_DIVISIONS = {
+  rifle: ["sa_standard", "sa_open", "mac", "mab"],
+  shotgun: ["shotgun_open", "shotgun_modified", "shotgun_standard", "shotgun_standard_manual"]
+};
+var ALL_DIVISIONS = [
+  "standard",
+  "open",
+  "production",
+  "production_optics",
+  "optics",
+  "classic",
+  "revolver",
+  "pcc_optics",
+  "pcc_iron",
+  "pistol_trening",
+  "pcc_trening",
+  "limited",
+  "limited_optics",
+  "carry_optics",
+  "single_stack",
+  "ssp",
+  "esp",
+  "cdp",
+  "ccp",
+  "bug",
+  "revolver_idpa",
+  "tactical",
+  "open_3gun",
+  "heavy",
+  "open_prs",
+  "production_prs",
+  "any",
+  "irons",
+  "open_22",
+  "conventional",
+  "international",
+  "sa_standard",
+  "sa_open",
+  "mac",
+  "mab",
+  "shotgun_open",
+  "shotgun_modified",
+  "shotgun_standard",
+  "shotgun_standard_manual"
+];
+function divisionsForMatch(match2) {
+  const firearmType = match2?.firearm_type;
+  const organization = match2?.organization;
+  if (organization && ORGANIZATION_DIVISIONS[organization]?.length === 0) return [];
+  if (firearmType === "bow") return [];
+  if (organization === "IPSC" && firearmType && FIREARM_DIVISIONS[firearmType]) {
+    return FIREARM_DIVISIONS[firearmType];
+  }
+  if (organization && ORGANIZATION_DIVISIONS[organization]) {
+    return ORGANIZATION_DIVISIONS[organization];
+  }
+  if (firearmType && FIREARM_DIVISIONS[firearmType]) {
+    return FIREARM_DIVISIONS[firearmType];
+  }
+  return ALL_DIVISIONS;
+}
+function matchHasDivisions(match2) {
+  return divisionsForMatch(match2).length > 0;
+}
+function defaultDivisionForMatch(match2) {
+  const divisions = divisionsForMatch(match2);
+  if (divisions.length === 0) return null;
+  if (match2?.organization === "NRL22" && divisions.includes("irons")) return "irons";
+  return divisions[0];
+}
+function resolveDivisionForMatch(match2, ...candidates) {
+  const divisions = divisionsForMatch(match2);
+  if (divisions.length === 0) return null;
+  for (const candidate of candidates) {
+    if (candidate && divisions.includes(candidate)) return candidate;
+  }
+  return defaultDivisionForMatch(match2);
+}
+
+// ../backend/src/routes/registrations.ts
 var registrationRoutes = new Hono2();
 function scrubPII(row, isPublic) {
   if (!isPublic) return row;
@@ -16236,6 +16329,7 @@ registrationRoutes.get("/matches/:matchId/registrations", async (c) => {
   const matchId = c.req.param("matchId");
   const role = c.get("authRole") || "anonymous";
   const isPublic = role === "anonymous";
+  const [match2] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
   const registrations = await sql`
     SELECT mr.id, mr.squad, mr.group_id, mr.division as reg_division, mr.category as reg_category,
            mr.power_factor as reg_power_factor, mr.is_dq, mr.dq_reason,
@@ -16246,11 +16340,16 @@ registrationRoutes.get("/matches/:matchId/registrations", async (c) => {
     WHERE mr.match_id = ${matchId}
     ORDER BY mr.squad NULLS LAST, s.last_name, s.first_name
   `;
+  const matchContext = match2 ?? {};
   const resolved = registrations.map((r) => ({
     ...scrubPII(r, isPublic),
-    effective_division: r.reg_division || r.division,
+    // Mirror the results query: a registration override wins even when it is
+    // invalid (resolved to the match default), otherwise inherit the shooter's
+    // global division.
+    effective_division: resolveDivisionForMatch(matchContext, r.reg_division ?? r.division) ?? "",
     effective_category: r.reg_category || r.category,
-    effective_power_factor: r.reg_power_factor || r.power_factor
+    effective_power_factor: r.reg_power_factor || r.power_factor,
+    division_applies: matchHasDivisions(matchContext)
   }));
   return c.json(resolved);
 });
@@ -16316,12 +16415,15 @@ registrationRoutes.post("/matches/:matchId/registrations", async (c) => {
   if (!shooterIds.length) {
     return c.json({ error: "shooterId or shooterIds required" }, 400);
   }
+  const [match2] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
   const results = [];
   for (const shooterId of shooterIds) {
     try {
+      const [shooter] = await sql`SELECT division FROM shooters WHERE id = ${shooterId}`;
+      const registrationDivision = resolveDivisionForMatch(match2 ?? {}, shooter?.division);
       const [reg] = await sql`
-        INSERT INTO match_registrations (match_id, shooter_id, squad)
-        VALUES (${matchId}, ${shooterId}, ${body.squad || null})
+        INSERT INTO match_registrations (match_id, shooter_id, squad, division)
+        VALUES (${matchId}, ${shooterId}, ${body.squad || null}, ${registrationDivision})
         RETURNING *
       `;
       results.push(reg);
@@ -16348,9 +16450,11 @@ registrationRoutes.post("/matches/:matchId/registrations/create-and-add", async 
     VALUES (${first_name}, ${last_name}, ${category}, ${tag || null}, ${division}, ${power_factor}, ${region}, ${email || null})
     RETURNING *
   `;
+  const [match2] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
+  const registrationDivision = resolveDivisionForMatch(match2 ?? {}, division);
   const [reg] = await sql`
-    INSERT INTO match_registrations (match_id, shooter_id, squad)
-    VALUES (${matchId}, ${shooter.id}, ${squad || null})
+    INSERT INTO match_registrations (match_id, shooter_id, squad, division)
+    VALUES (${matchId}, ${shooter.id}, ${squad || null}, ${registrationDivision})
     RETURNING *
   `;
   await audit(c, "registration.create-and-add", `registrations:${matchId}`, { shooterId: shooter.id });
@@ -17684,12 +17788,80 @@ async function recalculateStage(matchId, stageId) {
 
 // ../backend/src/routes/results.ts
 init_client();
+
+// ../backend/src/utils/resultsScoring.ts
+function configOf(config) {
+  if (!config) return {};
+  if (typeof config === "string") {
+    try {
+      return JSON.parse(config);
+    } catch {
+      return {};
+    }
+  }
+  return config;
+}
+function ringValuesForStage(scoringType, config) {
+  switch (scoringType) {
+    case "archery":
+      return [10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+    case "issf":
+      return [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0];
+    case "long_range":
+      return configOf(config)?.variant === "f_class" ? [11, 10, 9, 8, 7, 6, 5, 0] : [];
+    case "bullseye":
+      return [11, 10, 9, 8, 7, 6, 5, 0];
+    default:
+      return [];
+  }
+}
+function stageScoringProfile(scoringType, config) {
+  switch (scoringType) {
+    case "bullseye":
+    case "archery":
+    case "issf":
+      return "ring";
+    case "long_range":
+      return configOf(config)?.variant === "f_class" ? "ring" : "hit_count";
+    case "nrl22":
+      return "hit_count";
+    default:
+      return "zone";
+  }
+}
+function buildScoringMeta(stages) {
+  const relevant = stages.filter((stage) => stage?.scoring_type && stage.scoring_type !== "chrono");
+  const profiles = relevant.map((stage) => stageScoringProfile(stage.scoring_type, stage.config));
+  const profile = profiles.length > 0 && profiles.every((value) => value === profiles[0]) ? profiles[0] : "zone";
+  if (profile !== "ring") return { profile, ring_values: [] };
+  const values2 = /* @__PURE__ */ new Set();
+  for (const stage of relevant) {
+    for (const value of ringValuesForStage(stage.scoring_type, stage.config)) {
+      values2.add(value);
+    }
+  }
+  return { profile, ring_values: [...values2].sort((a, b2) => b2 - a) };
+}
+function parseJsonValue(value) {
+  if (value == null) return null;
+  if (typeof value === "string") {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+  return value;
+}
+
+// ../backend/src/routes/results.ts
 var resultsRoutes = new Hono2();
 var MATCH_TOTALS_CTE = `
     WITH stage_totals AS (
       SELECT
         ss.registration_id,
         SUM(ss.stage_points) as match_points,
+        SUM(ss.net_points) as achieved_points,
         SUM(ss.procedural_count) as procedurals,
         SUM(CASE WHEN st.scoring_type IN ('idpa','action_steel','multi_gun') THEN ss.total_time ELSE ss.time END) as total_time,
         SUM(CASE WHEN st.scoring_type IN ('comstock','virginia','hit_factor') THEN ss.net_points ELSE 0 END) as hf_net_points,
@@ -17728,6 +17900,7 @@ function matchCte(isDq) {
       mr.is_dq,
       ${isDq ? "mr.dq_reason," : ""}
       COALESCE(st.match_points, 0) as match_points,
+      COALESCE(st.achieved_points, 0) as achieved_points,
       ${MATCH_HF_COLUMN}
       COALESCE(st.total_time, 0) as time,
       COALESCE(tt.alpha, 0) as alpha,
@@ -17748,23 +17921,166 @@ async function runMatchQuery(matchId, isDq) {
   const order = isDq ? "ORDER BY s.last_name, s.first_name" : "ORDER BY match_points DESC";
   return sql.unsafe(query.replace(/\$1/g, `'${matchId}'`) + "\n" + order);
 }
+function emptyBreakdown() {
+  return { ring_counts: {}, hits: 0, misses: 0 };
+}
+function addRingValue(entry, value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return;
+  const key = String(numeric);
+  entry.ring_counts[key] = (entry.ring_counts[key] ?? 0) + 1;
+}
+async function loadMatchBreakdown(matchId) {
+  const breakdown = /* @__PURE__ */ new Map();
+  const entryFor = (registrationId) => {
+    let entry = breakdown.get(registrationId);
+    if (!entry) {
+      entry = emptyBreakdown();
+      breakdown.set(registrationId, entry);
+    }
+    return entry;
+  };
+  const scoreRows = await sql`
+    SELECT ss.registration_id, st.scoring_type, st.config, ss.score_data
+    FROM stage_scores ss
+    JOIN stages st ON st.id = ss.stage_id
+    WHERE ss.match_id = ${matchId}
+  `;
+  for (const row of scoreRows) {
+    if (stageScoringProfile(row.scoring_type, row.config) !== "ring") continue;
+    const scoreData = parseJsonValue(row.score_data);
+    const ringValues = Array.isArray(scoreData?.ring_values) ? scoreData.ring_values : [];
+    const entry = entryFor(row.registration_id);
+    for (const value of ringValues) addRingValue(entry, value);
+  }
+  const targetRows = await sql`
+    SELECT ss.registration_id, st.scoring_type, st.config, ts.target_data
+    FROM stage_scores ss
+    JOIN stages st ON st.id = ss.stage_id
+    JOIN target_scores ts ON ts.stage_score_id = ss.id
+    WHERE ss.match_id = ${matchId}
+  `;
+  for (const row of targetRows) {
+    if (stageScoringProfile(row.scoring_type, row.config) !== "hit_count") continue;
+    const targetData = parseJsonValue(row.target_data);
+    const entry = entryFor(row.registration_id);
+    if (targetData?.hit === true) entry.hits += 1;
+    else entry.misses += 1;
+  }
+  return breakdown;
+}
+async function loadStageBreakdown(stageId) {
+  const breakdown = /* @__PURE__ */ new Map();
+  const entryFor = (registrationId) => {
+    let entry = breakdown.get(registrationId);
+    if (!entry) {
+      entry = emptyBreakdown();
+      breakdown.set(registrationId, entry);
+    }
+    return entry;
+  };
+  const scoreRows = await sql`
+    SELECT ss.registration_id, st.scoring_type, st.config, ss.score_data
+    FROM stage_scores ss
+    JOIN stages st ON st.id = ss.stage_id
+    WHERE ss.stage_id = ${stageId}
+  `;
+  for (const row of scoreRows) {
+    if (stageScoringProfile(row.scoring_type, row.config) !== "ring") continue;
+    const scoreData = parseJsonValue(row.score_data);
+    const ringValues = Array.isArray(scoreData?.ring_values) ? scoreData.ring_values : [];
+    const entry = entryFor(row.registration_id);
+    for (const value of ringValues) addRingValue(entry, value);
+  }
+  const targetRows = await sql`
+    SELECT ss.registration_id, st.scoring_type, st.config, ts.target_data
+    FROM stage_scores ss
+    JOIN stages st ON st.id = ss.stage_id
+    JOIN target_scores ts ON ts.stage_score_id = ss.id
+    WHERE ss.stage_id = ${stageId}
+  `;
+  for (const row of targetRows) {
+    if (stageScoringProfile(row.scoring_type, row.config) !== "hit_count") continue;
+    const targetData = parseJsonValue(row.target_data);
+    const entry = entryFor(row.registration_id);
+    if (targetData?.hit === true) entry.hits += 1;
+    else entry.misses += 1;
+  }
+  return breakdown;
+}
+async function loadMatchDivisionInfo(matchId) {
+  const [match2] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
+  const matchContext = match2 ?? {};
+  return {
+    match: matchContext,
+    divisionApplies: matchHasDivisions(matchContext)
+  };
+}
+async function loadMatchContext(matchId) {
+  const divisionInfo = await loadMatchDivisionInfo(matchId);
+  const stageRows = await sql`SELECT scoring_type, config FROM stages WHERE match_id = ${matchId}`;
+  return {
+    ...divisionInfo,
+    meta: buildScoringMeta(stageRows),
+    breakdown: await loadMatchBreakdown(matchId)
+  };
+}
+function decorateMatchRow(row, context) {
+  const entry = context.breakdown.get(row.registration_id);
+  const profile = context.meta.profile;
+  const achievedPoints = Number(row.achieved_points ?? 0);
+  const matchPoints = profile === "zone" ? Number(row.match_points ?? 0) : achievedPoints;
+  return {
+    ...row,
+    division: resolveDivisionForMatch(context.match, row.division) ?? "",
+    division_applies: context.divisionApplies,
+    scoring_profile: profile,
+    ring_values: profile === "ring" ? context.meta.ring_values : null,
+    ring_counts: profile === "ring" ? entry?.ring_counts ?? {} : null,
+    hits: profile === "hit_count" ? entry?.hits ?? 0 : null,
+    misses: profile === "hit_count" ? entry?.misses ?? 0 : null,
+    achieved_points: achievedPoints,
+    match_points: matchPoints,
+    hit_factor: row.hit_factor != null ? Number(row.hit_factor) : null,
+    match_percent: 0,
+    position: 0
+  };
+}
+function prepareMatchRows(rows, context, isDq) {
+  const decorated = rows.map((row) => decorateMatchRow(row, context));
+  if (!isDq) {
+    decorated.sort((a, b2) => b2.match_points - a.match_points);
+  }
+  return decorated;
+}
+function rankGroup(rows) {
+  const highest = rows.length > 0 ? Number(rows[0].match_points) : 0;
+  return rows.map((row, index) => ({
+    ...row,
+    position: index + 1,
+    match_percent: highest > 0 ? Math.round(Number(row.match_points) / highest * 1e4) / 100 : 0
+  }));
+}
+function groupAndRank(rows, divisionApplies) {
+  const groups = {};
+  for (const row of rows) {
+    const division = divisionApplies ? row.division || "unknown" : "all";
+    if (!groups[division]) groups[division] = [];
+    groups[division].push(row);
+  }
+  const result = {};
+  for (const [division, group] of Object.entries(groups)) {
+    result[division] = rankGroup(group);
+  }
+  return result;
+}
 resultsRoutes.get("/matches/:matchId/results/overall", async (c) => {
   const matchId = c.req.param("matchId");
+  const context = await loadMatchContext(matchId);
   const results = await runMatchQuery(matchId, false);
-  const highestPoints = results.length > 0 ? Number(results[0].match_points) : 0;
-  const ranked = results.map((r, i) => ({
-    ...r,
-    position: i + 1,
-    match_points: Number(r.match_points),
-    hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
-    match_percent: highestPoints > 0 ? Math.round(Number(r.match_points) / highestPoints * 1e4) / 100 : 0
-  }));
+  const ranked = rankGroup(prepareMatchRows(results, context, false));
   const dq = await runMatchQuery(matchId, true);
-  const dqRanked = dq.map((r) => ({
-    ...r,
-    match_points: Number(r.match_points),
-    match_percent: 0
-  }));
+  const dqRanked = prepareMatchRows(dq, context, true);
   return c.json({ results: ranked, dq: dqRanked });
 });
 resultsRoutes.get("/matches/:matchId/results/progress", async (c) => {
@@ -17788,37 +18104,80 @@ resultsRoutes.get("/matches/:matchId/results/progress", async (c) => {
 });
 resultsRoutes.get("/matches/:matchId/results/divisions", async (c) => {
   const matchId = c.req.param("matchId");
+  const context = await loadMatchContext(matchId);
   const results = await runMatchQuery(matchId, false);
-  const divisionResults = {};
-  const divisionGroups = {};
-  for (const r of results) {
-    const div = r.division || "unknown";
-    if (!divisionGroups[div]) divisionGroups[div] = [];
-    divisionGroups[div].push(r);
-  }
-  for (const [division, shooters] of Object.entries(divisionGroups)) {
-    const highestPoints = shooters.length > 0 ? Number(shooters[0].match_points) : 0;
-    divisionResults[division] = shooters.map((r, i) => ({
-      ...r,
-      position: i + 1,
-      match_points: Number(r.match_points),
-      hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
-      match_percent: highestPoints > 0 ? Math.round(Number(r.match_points) / highestPoints * 1e4) / 100 : 0
-    }));
-  }
+  const divisionResults = groupAndRank(
+    prepareMatchRows(results, context, false),
+    context.divisionApplies
+  );
   const dq = await runMatchQuery(matchId, true);
-  const dqRanked = dq.map((r) => ({
-    ...r,
-    match_points: Number(r.match_points),
-    match_percent: 0
-  }));
+  const dqRanked = prepareMatchRows(dq, context, true);
   return c.json({ ...divisionResults, dq: dqRanked });
 });
+async function stageScoringContext(stage) {
+  return {
+    meta: buildScoringMeta([{ scoring_type: stage.scoring_type, config: stage.config }]),
+    breakdown: await loadStageBreakdown(stage.id)
+  };
+}
+function decorateStageRow(row, stageContext, matchContext) {
+  const entry = stageContext.breakdown.get(row.registration_id);
+  const profile = stageContext.meta.profile;
+  return {
+    ...row,
+    division: resolveDivisionForMatch(matchContext.match, row.division) ?? "",
+    division_applies: matchContext.divisionApplies,
+    scoring_profile: profile,
+    ring_values: profile === "ring" ? stageContext.meta.ring_values : null,
+    ring_counts: profile === "ring" ? entry?.ring_counts ?? {} : null,
+    hits: profile === "hit_count" ? entry?.hits ?? 0 : null,
+    misses: profile === "hit_count" ? entry?.misses ?? 0 : null,
+    achieved_points: Number(row.net_points ?? 0),
+    hit_factor: row.hit_factor != null ? Number(row.hit_factor) : 0,
+    net_points: Number(row.net_points ?? 0),
+    stage_percent: Number(row.stage_percent ?? 0),
+    stage_points: profile === "zone" ? Number(row.stage_points ?? 0) : Number(row.net_points ?? 0),
+    time: row.time != null ? Number(row.time) : null,
+    procedural_count: Number(row.procedural_count ?? 0),
+    position: 0,
+    division_position: 0
+  };
+}
+function rankStageRows(rows, profile, divisionApplies) {
+  const groups = {};
+  for (const row of rows) {
+    const division = divisionApplies ? row.division || "unknown" : "all";
+    if (!groups[division]) groups[division] = [];
+    groups[division].push(row);
+  }
+  const grouped = {};
+  for (const [division, group] of Object.entries(groups)) {
+    const sorted = [...group].sort((a, b2) => profile === "zone" ? b2.stage_points - a.stage_points : b2.net_points - a.net_points);
+    const best = profile === "zone" ? sorted[0]?.stage_points ?? 0 : sorted[0]?.net_points ?? 0;
+    grouped[division] = sorted.map((row, index) => ({
+      ...row,
+      position: index + 1,
+      division_position: index + 1,
+      stage_percent: profile === "zone" ? row.stage_percent : best > 0 ? Math.round(row.net_points / best * 1e4) / 100 : 0
+    }));
+  }
+  const flat = Object.values(grouped).flat().map((row) => ({ ...row }));
+  flat.sort((a, b2) => profile === "zone" ? b2.stage_points - a.stage_points : b2.net_points - a.net_points);
+  flat.forEach((row, index) => {
+    row.position = index + 1;
+  });
+  return { grouped, flat };
+}
 resultsRoutes.get("/matches/:matchId/results/stages", async (c) => {
   const matchId = c.req.param("matchId");
-  const stages = await sql`SELECT id, stage_number, name FROM stages WHERE match_id = ${matchId} ORDER BY stage_number`;
+  const matchContext = await loadMatchDivisionInfo(matchId);
+  const stages = await sql`
+    SELECT id, stage_number, name, scoring_type, config
+    FROM stages WHERE match_id = ${matchId} ORDER BY stage_number
+  `;
   const stageResults = [];
   for (const stage of stages) {
+    const stageContext = await stageScoringContext(stage);
     const scores = await sql`
       SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time, ss.procedural_count,
              s.first_name, s.last_name,
@@ -17838,36 +18197,10 @@ resultsRoutes.get("/matches/:matchId/results/stages", async (c) => {
                s.first_name, s.last_name, s.division, mr.division, mr.is_dq
       ORDER BY division, ss.stage_points DESC
     `;
-    const normalizedScores = scores.map((s) => ({
-      ...s,
-      hit_factor: Number(s.hit_factor),
-      net_points: Number(s.net_points),
-      stage_percent: Number(s.stage_percent),
-      stage_points: Number(s.stage_points),
-      time: s.time != null ? Number(s.time) : null
-    }));
-    const divisionGroups = {};
-    for (const s of normalizedScores) {
-      const div = s.division || "unknown";
-      if (!divisionGroups[div]) divisionGroups[div] = [];
-      divisionGroups[div].push(s);
-    }
-    const groupedScores = [];
-    for (const [division, divScores] of Object.entries(divisionGroups)) {
-      divScores.forEach((s, i) => {
-        groupedScores.push({
-          ...s,
-          position: i + 1,
-          division_position: i + 1
-        });
-      });
-    }
-    groupedScores.sort((a, b2) => b2.stage_points - a.stage_points);
-    groupedScores.forEach((s, i) => {
-      s.position = i + 1;
-    });
+    const normalizedScores = scores.map((s) => decorateStageRow(s, stageContext, matchContext));
+    const ranked = rankStageRows(normalizedScores, stageContext.meta.profile, matchContext.divisionApplies);
     const dqScores = await sql`
-      SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.time, ss.procedural_count,
+      SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time, ss.procedural_count,
              s.first_name, s.last_name,
              COALESCE(mr.division, s.division) as division,
              mr.is_dq, mr.dq_reason,
@@ -17881,7 +18214,7 @@ resultsRoutes.get("/matches/:matchId/results/stages", async (c) => {
       JOIN shooters s ON s.id = mr.shooter_id
       LEFT JOIN target_scores ts ON ts.stage_score_id = ss.id
       WHERE ss.stage_id = ${stage.id} AND mr.is_dq = TRUE
-      GROUP BY ss.id, ss.registration_id, ss.hit_factor, ss.net_points, ss.time, ss.procedural_count,
+      GROUP BY ss.id, ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time, ss.procedural_count,
                s.first_name, s.last_name, s.division, mr.division, mr.is_dq, mr.dq_reason
       ORDER BY s.last_name, s.first_name
     `;
@@ -17889,29 +18222,24 @@ resultsRoutes.get("/matches/:matchId/results/stages", async (c) => {
       stage_id: stage.id,
       stage_number: stage.stage_number,
       stage_name: stage.name,
-      scores: groupedScores,
-      dq_scores: dqScores.map((s) => ({
-        ...s,
-        hit_factor: Number(s.hit_factor),
-        net_points: Number(s.net_points),
-        time: Number(s.time),
-        procedural_count: Number(s.procedural_count)
-      })),
-      divisions: Object.fromEntries(
-        Object.entries(divisionGroups).map(([div, divScores]) => [
-          div,
-          divScores.map((s, i) => ({
-            ...s,
-            position: i + 1
-          }))
-        ])
-      )
+      scoring_profile: stageContext.meta.profile,
+      ring_values: stageContext.meta.ring_values,
+      division_applies: matchContext.divisionApplies,
+      scores: ranked.flat,
+      dq_scores: dqScores.map((s) => decorateStageRow(s, stageContext, matchContext)),
+      divisions: ranked.grouped
     });
   }
   return c.json(stageResults);
 });
 resultsRoutes.get("/matches/:matchId/results/stages/:stageId", async (c) => {
   const { matchId, stageId } = c.req.param();
+  const matchContext = await loadMatchDivisionInfo(matchId);
+  const [stage] = await sql`
+    SELECT id, scoring_type, config FROM stages WHERE id = ${stageId} AND match_id = ${matchId}
+  `;
+  if (!stage) return c.json({ error: "Stage not found" }, 404);
+  const stageContext = await stageScoringContext(stage);
   const scores = await sql`
     SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time,
            s.first_name, s.last_name,
@@ -17925,7 +18253,7 @@ resultsRoutes.get("/matches/:matchId/results/stages/:stageId", async (c) => {
     ORDER BY ss.stage_points DESC
   `;
   const dqScores = await sql`
-    SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.time,
+    SELECT ss.registration_id, ss.hit_factor, ss.net_points, ss.stage_percent, ss.stage_points, ss.time,
            s.first_name, s.last_name,
            COALESCE(mr.division, s.division) as division,
            COALESCE(mr.category, s.category) as category,
@@ -17936,26 +18264,19 @@ resultsRoutes.get("/matches/:matchId/results/stages/:stageId", async (c) => {
     WHERE ss.stage_id = ${stageId} AND mr.is_dq = TRUE
     ORDER BY s.last_name, s.first_name
   `;
+  const normalized = scores.map((s) => decorateStageRow(s, stageContext, matchContext));
+  const ranked = rankStageRows(normalized, stageContext.meta.profile, matchContext.divisionApplies);
   return c.json({
-    results: scores.map((s, i) => ({
-      ...s,
-      position: i + 1,
-      hit_factor: Number(s.hit_factor),
-      net_points: Number(s.net_points),
-      stage_percent: Number(s.stage_percent),
-      stage_points: Number(s.stage_points),
-      time: s.time !== null && s.time !== void 0 ? Number(s.time) : null
-    })),
-    dq: dqScores.map((s) => ({
-      ...s,
-      hit_factor: Number(s.hit_factor),
-      net_points: Number(s.net_points),
-      time: Number(s.time)
-    }))
+    scoring_profile: stageContext.meta.profile,
+    ring_values: stageContext.meta.ring_values,
+    division_applies: matchContext.divisionApplies,
+    results: ranked.flat,
+    dq: dqScores.map((s) => decorateStageRow(s, stageContext, matchContext))
   });
 });
 resultsRoutes.get("/matches/:matchId/results/categories", async (c) => {
   const matchId = c.req.param("matchId");
+  const context = await loadMatchContext(matchId);
   const categories = ["regular", "junior", "senior", "super_senior", "lady"];
   const categoryResults = {};
   for (const cat of categories) {
@@ -17967,6 +18288,7 @@ resultsRoutes.get("/matches/:matchId/results/categories", async (c) => {
         COALESCE(mr.division, s.division) as division,
         COALESCE(mr.power_factor, s.power_factor) as power_factor,
         COALESCE(st.match_points, 0) as match_points,
+        COALESCE(st.achieved_points, 0) as achieved_points,
         ${MATCH_HF_COLUMN}
         COALESCE(st.total_time, 0) as time,
         COALESCE(tt.alpha, 0) as alpha,
@@ -17984,35 +18306,19 @@ resultsRoutes.get("/matches/:matchId/results/categories", async (c) => {
     `;
     const results = await sql.unsafe(query.replace(/\$1/g, `'${matchId}'`).replace(/\$2/g, `'${cat}'`));
     if (results.length > 0) {
-      const byDivision = {};
-      for (const r of results) {
-        const div = r.division || "unknown";
-        if (!byDivision[div]) byDivision[div] = [];
-        byDivision[div].push(r);
-      }
-      categoryResults[cat] = {};
-      for (const [div, divResults] of Object.entries(byDivision)) {
-        const highest = Number(divResults[0].match_points);
-        categoryResults[cat][div] = divResults.map((r, i) => ({
-          ...r,
-          position: i + 1,
-          match_points: Number(r.match_points),
-          hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
-          match_percent: highest > 0 ? Math.round(Number(r.match_points) / highest * 1e4) / 100 : 0
-        }));
-      }
+      categoryResults[cat] = groupAndRank(
+        prepareMatchRows(results, context, false),
+        context.divisionApplies
+      );
     }
   }
   const dq = await runMatchQuery(matchId, true);
-  const dqRanked = dq.map((r) => ({
-    ...r,
-    match_points: Number(r.match_points),
-    match_percent: 0
-  }));
+  const dqRanked = prepareMatchRows(dq, context, true);
   return c.json({ ...categoryResults, dq: dqRanked });
 });
 resultsRoutes.get("/matches/:matchId/results/tags", async (c) => {
   const matchId = c.req.param("matchId");
+  const context = await loadMatchContext(matchId);
   const tags = await sql`
     SELECT DISTINCT s.tag FROM match_registrations mr
     JOIN shooters s ON s.id = mr.shooter_id
@@ -18029,6 +18335,7 @@ resultsRoutes.get("/matches/:matchId/results/tags", async (c) => {
         COALESCE(mr.division, s.division) as division,
         COALESCE(mr.power_factor, s.power_factor) as power_factor,
         COALESCE(st.match_points, 0) as match_points,
+        COALESCE(st.achieved_points, 0) as achieved_points,
         ${MATCH_HF_COLUMN}
         COALESCE(st.total_time, 0) as time,
         COALESCE(tt.alpha, 0) as alpha,
@@ -18046,31 +18353,14 @@ resultsRoutes.get("/matches/:matchId/results/tags", async (c) => {
     `;
     const results = await sql.unsafe(query.replace(/\$1/g, `'${matchId}'`).replace(/\$2/g, `'${tag}'`));
     if (results.length > 0) {
-      const byDivision = {};
-      for (const r of results) {
-        const div = r.division || "unknown";
-        if (!byDivision[div]) byDivision[div] = [];
-        byDivision[div].push(r);
-      }
-      tagResults[tag] = {};
-      for (const [div, divResults] of Object.entries(byDivision)) {
-        const highest = Number(divResults[0].match_points);
-        tagResults[tag][div] = divResults.map((r, i) => ({
-          ...r,
-          position: i + 1,
-          match_points: Number(r.match_points),
-          hit_factor: r.hit_factor != null ? Number(r.hit_factor) : null,
-          match_percent: highest > 0 ? Math.round(Number(r.match_points) / highest * 1e4) / 100 : 0
-        }));
-      }
+      tagResults[tag] = groupAndRank(
+        prepareMatchRows(results, context, false),
+        context.divisionApplies
+      );
     }
   }
   const dq = await runMatchQuery(matchId, true);
-  const dqRanked = dq.map((r) => ({
-    ...r,
-    match_points: Number(r.match_points),
-    match_percent: 0
-  }));
+  const dqRanked = prepareMatchRows(dq, context, true);
   return c.json({ ...tagResults, dq: dqRanked });
 });
 resultsRoutes.get("/matches/:matchId/shooters/:registrationId/stage-summaries", async (c) => {
@@ -18084,10 +18374,12 @@ resultsRoutes.get("/matches/:matchId/shooters/:registrationId/stage-summaries", 
     WHERE mr.id = ${registrationId} AND mr.match_id = ${matchId}
   `;
   if (!reg) return c.json({ error: "Registration not found" }, 404);
+  const [match2] = await sql`SELECT organization, firearm_type FROM matches WHERE id = ${matchId}`;
   const registration = {
     first_name: reg.first_name,
     last_name: reg.last_name,
-    division: reg.reg_division || reg.shooter_division,
+    division: resolveDivisionForMatch(match2 ?? {}, reg.reg_division ?? reg.shooter_division) ?? "",
+    division_applies: matchHasDivisions(match2 ?? {}),
     category: reg.reg_category || reg.shooter_category,
     power_factor: reg.reg_power_factor || reg.shooter_power_factor,
     is_dq: reg.is_dq
@@ -30744,7 +31036,7 @@ function rankRows(rows, bestScore, mode) {
     };
   });
 }
-function rankGroup(rows, mode, minParticipants) {
+function rankGroup2(rows, mode, minParticipants) {
   if (minParticipants != null && rows.length < minParticipants) return null;
   return rankRows(rows.slice(), rows[0].score, mode);
 }
@@ -30872,7 +31164,7 @@ cupRoutes.get("/:id/results", async (c) => {
   }
   const byDivisionOut = {};
   for (const [division, rowsOfDiv] of Object.entries(byDivision)) {
-    const ranked = rankGroup(rowsOfDiv, mode, minParticipants);
+    const ranked = rankGroup2(rowsOfDiv, mode, minParticipants);
     if (ranked) byDivisionOut[division] = ranked;
   }
   const overallBest = qualified.length > 0 ? qualified[0].score : 0;
@@ -30887,7 +31179,7 @@ cupRoutes.get("/:id/results", async (c) => {
   for (const [cat, divisions] of Object.entries(byCategory)) {
     if (selectedCategories && !selectedCategories.includes(cat)) continue;
     for (const [division, rowsOfDiv] of Object.entries(divisions)) {
-      const ranked = rankGroup(rowsOfDiv, mode, minParticipants);
+      const ranked = rankGroup2(rowsOfDiv, mode, minParticipants);
       if (!ranked) continue;
       if (!byCategoryOut[cat]) byCategoryOut[cat] = {};
       byCategoryOut[cat][division] = ranked;
@@ -30903,7 +31195,7 @@ cupRoutes.get("/:id/results", async (c) => {
   const byTagOut = {};
   for (const [tag, divisions] of Object.entries(byTag)) {
     for (const [division, rowsOfDiv] of Object.entries(divisions)) {
-      const ranked = rankGroup(rowsOfDiv, mode, minParticipants);
+      const ranked = rankGroup2(rowsOfDiv, mode, minParticipants);
       if (!ranked) continue;
       if (!byTagOut[tag]) byTagOut[tag] = {};
       byTagOut[tag][division] = ranked;

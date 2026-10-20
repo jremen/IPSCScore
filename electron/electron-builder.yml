@@ -45,6 +45,13 @@ mac:
   # Hardened runtime needed for macOS distribution
   # hardenedRuntime: true
   # entitlements: resources/entitlements.mac.plist
+  # @electron/osx-sign walks the whole bundle and runs `codesign` on every file
+  # it considers binary — that includes PostgreSQL's ~1,500 timezone data files.
+  # They are plain data sealed by the app signature, so signing them one by one
+  # only makes packaging take tens of minutes. PostgreSQL's bin/ and lib/ stay
+  # signable because those executables and dylibs must run on arm64.
+  signIgnore:
+    - "/Contents/Resources/pg/share/"
 
 win:
   artifactName: ${productName} Setup ${version}-${arch}.${ext}

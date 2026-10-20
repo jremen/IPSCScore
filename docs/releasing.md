@@ -120,13 +120,50 @@ length of the run only.
 
 ---
 
-## 4. Known limitations
+## 4. Local macOS builds
+
+`npm run build:mac` and the macOS half of `build:all` build **unsigned**, exactly
+like CI: they set `CSC_IDENTITY_AUTO_DISCOVERY=false`. This is intentional — an
+unsigned local build needs no certificate and cannot block on keychain access.
+
+To sign a local build with the certificate already in your login keychain:
+
+```bash
+cd electron
+npm run build:mac:signed
+```
+
+That uses [`electron-builder.local-sign.yml`](../electron/electron-builder.local-sign.yml):
+development signing mode, no Apple timestamp, no hardened runtime. It is suitable
+for running the app on your own Mac, not for distribution.
+
+> Xcode's *Signing & Capabilities* settings do not apply here. Electron apps are
+> signed by electron-builder through the macOS keychain (`codesign`), not by the
+> Xcode project.
+
+### Why signing used to take forever
+
+`@electron/osx-sign` walks the whole app bundle and runs `codesign` on every file
+it detects as binary. The bundled PostgreSQL `share/` tree contains about 1,500
+timezone data files, each costing a `codesign` call (plus a timestamp round-trip).
+`mac.signIgnore` excludes that directory; PostgreSQL's `bin/` and `lib/` binaries
+are still signed because they must run on arm64.
+
+A distributable, notarized build needs a **Developer ID Application** certificate,
+`mac.type: distribution`, timestamping enabled, `hardenedRuntime: true`, and
+`APPLE_ID` / `APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` (or `CSC_LINK` /
+`CSC_KEY_PASSWORD`) in the environment.
+
+---
+
+## 5. Known limitations
 
 - **macOS builds are unsigned** (`CSC_IDENTITY_AUTO_DISCOVERY: 'false'`), so
-  Gatekeeper warns on first launch and the app is not notarized. Signing needs an
-  Apple Developer certificate; add `CSC_LINK` / `CSC_KEY_PASSWORD` (and
-  `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` for notarization) as
-  secrets and drop that env var to enable it.
+  Gatekeeper warns on first launch and the app is not notarized.
+  `npm run build:mac:signed` signs locally for development, but a release still
+  needs an Apple Developer ID certificate; add `CSC_LINK` / `CSC_KEY_PASSWORD`
+  (and `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` for
+  notarization) as secrets and set the distribution signing options.
 - **Windows installers are unsigned**, so SmartScreen warns. That needs a code
   signing certificate (and, for the arm64 build, one that supports it).
 - **Linux ships as an AppImage only** — no `.deb`/`.rpm`. Add extra targets under
@@ -146,7 +183,7 @@ length of the run only.
 
 ---
 
-## 5. Troubleshooting
+## 6. Troubleshooting
 
 | Symptom | Cause / fix |
 |---|---|
@@ -155,6 +192,7 @@ length of the run only.
 | `Version check failed` | The tag and the `package.json` versions disagree. Run `npm run version:patch\|minor\|major`, commit, then re-tag. |
 | `npm ci can only install packages when your package.json and package-lock.json are in sync` | The lock file is stale. Run `npm install` locally, commit `package-lock.json`, then re-run the workflow. |
 | Desktop job fails in `npm run build:*` | Usually a missing PostgreSQL download or a packaging error; open the job log — each `npm run` step is the local script verbatim. |
+| Local `build:mac` looks stuck at `signing file=…IPSCScore.app` | electron-builder found a certificate and is signing the bundle one file at a time. Default `build:mac` is unsigned now; if you re-enabled discovery, use `build:mac:signed` or check `mac.signIgnore` in `electron-builder.yml`. |
 | `Secret ANDROID_KEYSTORE_BASE64 is not set` | Secrets are missing on the repository (or only set for an environment). See §3. |
 | `Keystore was tampered with, or password was incorrect` | Wrong `ANDROID_KEYSTORE_PASSWORD`, or the base64 was truncated. Re-copy it with `base64 -i` (no line wrapping). |
 | `APK is not signed` / `apksigner` fails | The keystore secret is not the one that produced previous releases. Check the DN printed by the *Verify the APK* step. |
