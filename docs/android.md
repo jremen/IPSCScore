@@ -1,16 +1,18 @@
-# Android (standalone) build
+# Android / iOS (standalone) builds
 
-IPSCScore ships the **same codebase** to three runtimes:
+IPSCScore ships the **same codebase** to four runtimes:
 
 | Runtime  | Shell           | Data layer                          |
 | -------- | --------------- | ----------------------------------- |
 | Web      | browser         | HTTP → Node/Hono backend → Postgres |
 | Desktop  | Electron        | HTTP → Node/Hono backend → Postgres |
 | Android  | Capacitor       | **on-device SQLite** (no backend)   |
+| iOS      | Capacitor       | **on-device SQLite** (no backend)   |
 
-There is no fork and no second repository. The Android app is the existing React
+There is no fork and no second repository. The mobile apps are the existing React
 frontend, wrapped in Capacitor, with the remote data client swapped for a local
-one at runtime.
+one at runtime. Android and iOS share the same `mobile/` shell, SQLite schema and
+data client; only the generated native projects differ.
 
 ## Layout
 
@@ -22,10 +24,10 @@ packages/core/            shared, dependency-free domain layer
   src/scoring/            every scoring formula + ranking helper
   src/scoring/stageParams.ts  min rounds / max points per stage type
 
-frontend/                 the UI, unchanged for all three runtimes
+frontend/                 the UI, unchanged for all four runtimes
   src/types/*.ts          thin re-exports of @ipscscore/core types
   src/utils/scoring.ts    scoring preview → delegates to @ipscscore/core
-  src/services/api.ts     picks the client: local (Android) or HTTP
+  src/services/api.ts     picks the client: local (Android/iOS) or HTTP
   src/services/data/
     platform.ts           'web' | 'electron' | 'android' | 'ios'
     sqlite/               the on-device implementation
@@ -39,16 +41,17 @@ frontend/                 the UI, unchanged for all three runtimes
       auth.ts             local admin password (PBKDF2) + session token
       client.ts           the api-shaped facade
 
-mobile/                   Capacitor shell
+mobile/                   Capacitor shell (Android + iOS)
   capacitor.config.ts
-  android/                generated native project
+  android/                generated native project (Gradle)
+  ios/                    generated native project (Xcode, SPM)
 ```
 
 ## Why this shape
 
-Electron cannot target Android — it officially supports macOS, Windows and Linux
-only. Capacitor is the supported path: it packages the Vite bundle into a native
-webview and exposes native APIs through plugins.
+Electron cannot target Android or iOS — it officially supports macOS, Windows and
+Linux only. Capacitor is the supported path: it packages the Vite bundle into a
+native webview and exposes native APIs through plugins.
 
 The frontend already spoke to the backend through a single `api` object. Rather
 than teach every component about SQLite, `services/api.ts` now resolves that
@@ -157,7 +160,12 @@ matches `frontend/public/icons/apple-touch-icon.png`.
 
 ```bash
 bash scripts/generate-android-icons.sh   # needs cairosvg + ImageMagick 7
+bash scripts/generate-ios-icons.sh       # same artwork → 1024×1024 iOS AppIcon
 ```
+
+The iOS icon is a single 1024×1024 opaque RGB PNG in
+`mobile/ios/App/App/Assets.xcassets/AppIcon.appiconset/`; Xcode derives every
+smaller size from it, and iOS applies the rounded-square mask itself.
 
 It writes three files per `mipmap-<density>/`:
 
@@ -180,21 +188,27 @@ npm install                       # links @ipscscore/core, installs Capacitor
 
 npm run build:android:debug       # frontend build → cap sync → gradlew assembleDebug
 npm run build:android:release     # signed release needs android/keystore.properties
+npm run build:ios:simulator       # frontend build → cap sync → xcodebuild (simulator)
 npm run open:android              # open in Android Studio
+npm run open:ios                  # open in Xcode
 npm run sync:android              # cap sync only (copy assets + plugin config)
+npm run sync:ios                  # same for iOS, also syncs the version from package.json
 ```
 
 `mobile/capacitor.config.ts` points `webDir` at `../frontend/dist`; `cap sync`
-copies that bundle into `android/app/src/main/assets/public`.
+copies that bundle into `android/app/src/main/assets/public` and
+`ios/App/App/public`.
 
 Requirements: **JDK 21** (Capacitor 8 compiles with `sourceCompatibility 21`), Android
 SDK with platform 36 (Capacitor's `compileSdk`/`targetSdk`), `minSdk` 24, and an
 emulator or device. The first Gradle run downloads Gradle 8.14.3 and the Android
-Gradle plugin.
+Gradle plugin. iOS needs macOS and **Xcode 26+**, an iPhone/iPad on iOS 15+.
 
 For the full step-by-step guide — setting up `local.properties`, installing over USB
 or Wi-Fi (`adb`), live reload, and producing a signed release APK — see
-[`../mobile/README.md`](../mobile/README.md).
+[`../mobile/README.md`](../mobile/README.md). Signing and installing the iOS build
+without the App Store (free Personal Team or Ad Hoc) is in
+[`../mobile/README-ios.md`](../mobile/README-ios.md).
 
 Published versions are built for you: pushing a version tag makes
 [`../.github/workflows/release.yml`](../.github/workflows/release.yml) build, sign

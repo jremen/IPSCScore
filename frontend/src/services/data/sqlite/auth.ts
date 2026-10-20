@@ -1,7 +1,7 @@
 import { nowIso, one, run, uuid } from './db';
 
 /**
- * Local admin authentication for the standalone Android build.
+ * Local admin authentication for the standalone Android/iOS builds.
  *
  * There is no server and no network, so the "admin" is simply whoever knows the
  * device password. We store a PBKDF2-SHA256 hash in `app_settings` and issue an

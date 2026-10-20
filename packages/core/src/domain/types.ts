@@ -1,6 +1,6 @@
 /**
- * Canonical domain types shared by the frontend, the Android/Capacitor runtime
- * and (progressively) the backend.
+ * Canonical domain types shared by the frontend, the Capacitor (Android/iOS)
+ * runtimes and (progressively) the backend.
  *
  * These are the single source of truth — platform-specific type files simply
  * re-export from here so the wire shape cannot drift between clients.

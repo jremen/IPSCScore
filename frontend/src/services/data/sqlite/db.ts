@@ -5,7 +5,7 @@ import { DEFAULT_SETTINGS, SCHEMA_STATEMENTS, SCHEMA_VERSION } from './schema';
  * Connection layer for the on-device SQLite database.
  *
  * The plugin is imported dynamically so that neither the web nor the Electron
- * bundle ever pulls in the native Capacitor code — only the Android build does.
+ * bundle ever pulls in the native Capacitor code — only the native mobile builds do.
  */
 
 export const DB_NAME = 'ipscscore';

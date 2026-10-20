@@ -1,5 +1,5 @@
 /**
- * SQLite schema for the standalone (Android) build.
+ * SQLite schema for the standalone (Android/iOS) builds.
  *
  * This mirrors the PostgreSQL migrations in `backend/src/db/migrations` with the
  * Postgres-only features translated:

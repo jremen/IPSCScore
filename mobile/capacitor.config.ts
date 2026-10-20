@@ -1,10 +1,10 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * Capacitor configuration for the standalone Android build.
+ * Capacitor configuration for the standalone mobile builds (Android + iOS).
  *
- * The Android app ships the same Vite bundle as the web/desktop clients, but the
- * data layer is backed by on-device SQLite instead of the HTTP/PostgreSQL API.
+ * Both apps ship the same Vite bundle as the web/desktop clients, but the data
+ * layer is backed by on-device SQLite instead of the HTTP/PostgreSQL API.
  */
 const config: CapacitorConfig = {
   appId: 'com.ipscscore.app',
@@ -16,15 +16,21 @@ const config: CapacitorConfig = {
   },
   plugins: {
     CapacitorSQLite: {
+      // Keep the database out of Documents: it stays invisible to iTunes/Finder
+      // file sharing and is included in iCloud/iTunes device backups.
+      iosDatabaseLocation: 'Library/CapacitorDatabase',
       // Encryption is opt-in: enable together with a passphrase flow before release.
       androidIsEncryption: false,
       androidBiometric: {
         biometricAuth: false,
-        biometricAuthTitle: 'Unlock IPSCScore',
-        biometricAuthSubtitle: 'Authenticate to open the local match database',
-        biometricAuthDescription: 'Use your fingerprint or face to unlock the local database',
+        biometricTitle: 'Unlock IPSCScore',
+        biometricSubTitle: 'Authenticate to open the local match database',
       },
       iosIsEncryption: false,
+      iosBiometric: {
+        biometricAuth: false,
+        biometricTitle: 'Unlock IPSCScore',
+      },
     },
   },
 };

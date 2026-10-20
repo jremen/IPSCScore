@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, TextInput, Button, Alert } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { getOrCreateDeviceId, useAuthStore } from '../../stores/authStore';
+import { isLocalRuntime } from '../../services/data/platform';
 import { isOnlineSync } from '../../services/connectivity';
 import LanguageSelector from '../settings/LanguageSelector';
 
@@ -44,6 +45,8 @@ export default function StageLoginPage() {
 
   // Check for existing cookie-based session on mount (PWA flow: user scanned in Safari, now opens PWA)
   useEffect(() => {
+    // The standalone mobile builds have no backend to auto-log-in to.
+    if (isLocalRuntime()) return;
     const sessionToken = localStorage.getItem('auth_scorer_token');
     if (sessionToken) return;
     if (autoLoginAttempted) return;

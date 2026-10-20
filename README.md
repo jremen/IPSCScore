@@ -18,6 +18,7 @@
 - [WinMSS Import](#winmss-import)
 - [Electron Desktop App](#electron-desktop-app)
 - [Android App (standalone)](#android-app-standalone)
+- [iOS App (standalone)](#ios-app-standalone)
 - [Releases](#releases)
 - [Internationalization](#internationalization)
 - [Windows Compatibility](#windows-compatibility)
@@ -390,6 +391,36 @@ Gradle dependencies.
 Not yet implemented on Android: WinMSS/CSV import, match export, backup/restore,
 cups, and stage images. Full details, the PostgreSQL→SQLite mapping and the
 remaining work are in [`docs/android.md`](docs/android.md).
+
+---
+
+## iOS App (standalone)
+
+The iOS build is the same Capacitor shell and the same on-device SQLite data
+layer as Android, packaged with **Swift Package Manager** and requiring
+**Xcode 26 or newer**.
+
+- **Shell** — `mobile/` (Capacitor 8), native project in `mobile/ios/`
+- **Frontend** — the same `frontend/` build, pointed at by `webDir`
+- **Data** — SQLite via `@capacitor-community/sqlite`, stored in
+  `Library/CapacitorDatabase` and included in device backups
+
+```bash
+npm install
+npm run build:ios:simulator     # build + sync + compile for the simulator
+npm run open:ios                # open in Xcode, then press Run
+```
+
+Installing on a real iPhone/iPad needs no App Store: a free Apple Account
+(Personal Team) is enough, with the provisioning profile re-signed from Xcode
+about once a week. A paid Apple Developer account enables Ad Hoc `.ipa`
+distribution for club devices with a one-year lifetime.
+
+**Step-by-step build, signing and device-install guide (simulator, free Apple
+Account, Ad Hoc, troubleshooting): [`mobile/README-ios.md`](mobile/README-ios.md).**
+
+Feature coverage matches the Android app — including its current gaps (import,
+backup/restore, cups, stage images). See [`docs/android.md`](docs/android.md).
 
 ---
 

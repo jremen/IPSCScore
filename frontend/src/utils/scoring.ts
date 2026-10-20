@@ -2,7 +2,7 @@
  * Client-side scoring preview.
  *
  * The formulas are not implemented here — they live in `@ipscscore/core`, which
- * is also what the standalone Android build uses to compute and persist scores.
+ * is also what the standalone mobile builds use to compute and persist scores.
  * This module only adapts the preview call signatures to the shared core.
  */
 
