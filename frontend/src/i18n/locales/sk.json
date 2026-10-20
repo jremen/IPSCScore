@@ -788,7 +788,13 @@
     "auditLogError": "Nepodarilo sa načítať audit log.",
     "auditLogTotal": "Celkom {{count}} záznamov",
     "auditLogErrorFallback": "Nepodarilo sa načítať",
-    "themeToggleAria": "Prepínať motív"
+    "themeToggleAria": "Prepínať motív",
+    "powerTitle": "Správa napájania",
+    "powerDescription": "Udržiavať počítač aktívny počas hostovania skórovania, aby mobilné zariadenia zostali pripojené.",
+    "preventSleep": "Zabrániť spánku/hibernácii",
+    "preventSleepOn": "zapnuté",
+    "preventSleepOff": "vypnuté",
+    "preventSleepHint": "Udržiava systém a obrazovku aktívne. Nenahrádza vynútené vypnutie ani administrátorské politiky napájania."
   },
   "matchDetail": {
     "back": "← Späť",

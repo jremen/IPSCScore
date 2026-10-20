@@ -36,6 +36,23 @@ export interface StageResultGroup {
   scores: StageResult[];
 }
 
+/**
+ * Aggregate match-completion summary for the public kiosk.
+ *
+ * Counts only — no registration or stage identifiers — so the unauthenticated
+ * kiosk can display progress without the protected `scoring-progress` endpoint.
+ */
+export interface PublicMatchProgress {
+  /** Distinct (stage, shooter) score entries for non-DQ registrations. */
+  scoredLength: number;
+  /** Number of stages in the match. */
+  stagesLength: number;
+  /** Number of non-DQ registrations. */
+  registrationsLength: number;
+  /** scoredLength / (stages × registrations), as a 0–100 percentage. */
+  progressValue: number;
+}
+
 export interface CSVImportResult {
   imported: number;
   updated?: number;

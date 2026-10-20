@@ -3,6 +3,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-rea
 import { useTranslation } from 'react-i18next';
 import LanguageSelector from './LanguageSelector';
 import DatabaseSettings from './DatabaseSettings';
+import PowerSettings from './PowerSettings';
 import AdminPasswordSection from './AdminPasswordSection';
 import AuditLogModal from './AuditLogModal';
 import { useEscClose } from '../../hooks/useEscClose';
@@ -32,6 +33,8 @@ export default function SettingsModal({ show, onClose }: SettingsModalProps) {
 
             <DatabaseSettings />
         </div>
+
+        <PowerSettings />
 
         <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
           <h3 className="text-lg font-semibold dark:text-white mb-2">{t('settings.auditLog')}</h3>

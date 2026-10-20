@@ -772,7 +772,13 @@
     "auditLogError": "Failed to load audit log.",
     "auditLogTotal": "{{count}} total entries",
     "auditLogErrorFallback": "Failed to load",
-    "themeToggleAria": "Toggle theme"
+    "themeToggleAria": "Toggle theme",
+    "powerTitle": "Power management",
+    "powerDescription": "Keep this computer awake while it hosts scoring, so mobile devices can stay connected.",
+    "preventSleep": "Prevent sleep/hibernation",
+    "preventSleepOn": "on",
+    "preventSleepOff": "off",
+    "preventSleepHint": "Keeps the system and display awake. It does not override a forced shutdown or administrator power policies."
   },
   "matchDetail": {
     "back": "← Back",

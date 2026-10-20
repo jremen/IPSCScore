@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, dialog, ipcMain, utilityProcess } from 'electron';
+import { app, BrowserWindow, Menu, dialog, ipcMain, powerSaveBlocker, utilityProcess } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
@@ -61,6 +61,9 @@ app.on('second-instance', () => {
 let mainWindow: BrowserWindow | null = null;
 let pgManager: PgManager | null = null;
 let backendProcess: ChildProcess | Electron.UtilityProcess | null = null;
+
+/** powerSaveBlocker id while "prevent sleep/hibernation" is active, otherwise null. */
+let preventSleepBlockerId: number | null = null;
 
 /**
  * Resolve the path to the backend dist directory.
@@ -357,6 +360,65 @@ async function writeDbConfig(databaseUrl: string): Promise<void> {
 }
 
 /**
+ * Persisted desktop preferences. Stored outside the database so they apply
+ * before PostgreSQL and the backend are started.
+ */
+interface AppPreferences {
+  /** Keep the host computer awake so phones can stay connected while scoring. */
+  preventSleep: boolean;
+}
+
+function getPreferencesPath(): string {
+  return path.join(app.getPath('userData'), 'app-preferences.json');
+}
+
+async function readPreferences(): Promise<AppPreferences> {
+  try {
+    const data = await fs.readFile(getPreferencesPath(), 'utf-8');
+    const parsed = JSON.parse(data);
+    return { preventSleep: parsed?.preventSleep === true };
+  } catch {
+    return { preventSleep: false };
+  }
+}
+
+async function writePreferences(prefs: AppPreferences): Promise<void> {
+  try {
+    await fs.writeFile(getPreferencesPath(), JSON.stringify(prefs, null, 2), 'utf-8');
+  } catch (err) {
+    logError('[Main] Failed to save preferences', err);
+  }
+}
+
+function isPreventSleepActive(): boolean {
+  return preventSleepBlockerId !== null && powerSaveBlocker.isStarted(preventSleepBlockerId);
+}
+
+/**
+ * Start or stop the OS power-save blocker.
+ *
+ * `prevent-display-sleep` keeps both the system and the display awake, which is
+ * what a scoring host needs. It cannot override a forced shutdown or an
+ * administrator-enforced power policy.
+ */
+function applyPreventSleep(enabled: boolean): boolean {
+  if (enabled) {
+    if (!isPreventSleepActive()) {
+      preventSleepBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+    }
+  } else if (preventSleepBlockerId !== null) {
+    if (powerSaveBlocker.isStarted(preventSleepBlockerId)) {
+      powerSaveBlocker.stop(preventSleepBlockerId);
+    }
+    preventSleepBlockerId = null;
+  }
+
+  const active = isPreventSleepActive();
+  log(`[Main] Prevent sleep/hibernation ${active ? 'enabled' : 'disabled'}`);
+  return active;
+}
+
+/**
  * Show a dialog when bundled PostgreSQL fails, allowing the user to
  * configure an external PostgreSQL connection.
  * Returns the DATABASE_URL to use, or null if the user chose to quit.
@@ -396,6 +458,10 @@ async function testDatabaseConnection(databaseUrl: string): Promise<boolean> {
 async function main(): Promise<void> {
   // Reinitialize logger with the proper app data path now that the app is ready
   initLogger(app.getPath('userData'));
+
+  // Restore the "prevent sleep/hibernation" preference before the window opens.
+  const preferences = await readPreferences();
+  applyPreventSleep(preferences.preventSleep);
 
   const port = 3001;
   const lanIp = getLanIp();
@@ -526,6 +592,16 @@ async function main(): Promise<void> {
     return result.canceled ? null : result.filePaths[0];
   });
 
+  // Power management: keep the host computer awake so phones stay connected.
+  ipcMain.handle('get-prevent-sleep', () => isPreventSleepActive());
+  ipcMain.handle('set-prevent-sleep', async (_event, enabled: unknown) => {
+    const value = Boolean(enabled);
+    const active = applyPreventSleep(value);
+    const current = await readPreferences();
+    await writePreferences({ ...current, preventSleep: value });
+    return active;
+  });
+
   // Create the browser window
   createWindow(port, lanIp);
 
@@ -581,6 +657,14 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   log('[Main] Shutting down...');
+
+  // Release the power-save blocker if it is still active.
+  if (preventSleepBlockerId !== null) {
+    if (powerSaveBlocker.isStarted(preventSleepBlockerId)) {
+      powerSaveBlocker.stop(preventSleepBlockerId);
+    }
+    preventSleepBlockerId = null;
+  }
 
   // Kill the backend process
   killBackend();

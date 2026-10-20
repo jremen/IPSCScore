@@ -1,41 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../services/api';
-import { useUIStore } from '../../stores/uiStore';
-import { useResultsStore } from '../../stores/resultsStore';
 import { divisionLabel } from '../../utils/constants';
-import { hasHitFactor } from '../../utils/hitFactor';
-import { useKioskAutoplay } from '../../hooks/useKioskAutoplay';
-import { columnHeader, cellValue, type ColumnKey } from './ResultsTable';
-import MatchProgress from "../layout/MatchProgress";
-
-const REFRESH_INTERVAL_MS = 30000; // fallback poll when SSE is unavailable
-const DIVISION_COLUMNS: ColumnKey[] = [
-  'position',
-  'shooter',
-  'time',
-  'alpha',
-  'charlie',
-  'delta',
-  'miss',
-  'noShootHits',
-  'procedurals',
-  'matchPercent',
-  'hitFactor',
-  'matchPoints',
-];
-
-function cellClass(col: ColumnKey): string {
-  if (col === 'position') return 'px-6 py-3 text-center font-mono font-bold';
-  if (col === 'shooter') return 'px-6 py-3 text-left font-semibold text-white whitespace-nowrap';
-  return 'px-6 py-3 text-right font-mono tabular-nums';
-}
-
-function headerClass(col: ColumnKey): string {
-  if (col === 'position') return 'text-center';
-  if (col === 'shooter') return 'text-left';
-  return 'text-right';
-}
+import { columnHeader, cellValue } from './ResultsTable';
+import MatchProgress from '../layout/MatchProgress';
+import { usePublicResultsKiosk, cellClass, headerClass } from '../../hooks/usePublicResultsKiosk';
 
 /**
  * TV kiosk presentation of the current match results.
@@ -44,129 +12,27 @@ function headerClass(col: ColumnKey): string {
  * fit on screen are slowly scrolled from top to bottom before advancing.
  * Reachable at `/results/kiosk` — the standard `/results` page (and its QR
  * code) is untouched.
+ *
+ * All data-fetching and rotation state lives in `usePublicResultsKiosk`.
  */
 export default function PublicResultsKioskView() {
   const { t } = useTranslation();
-  const setActiveTab = useUIStore((s) => s.setActiveTab);
-  const setActiveMatch = useUIStore((s) => s.setActiveMatch);
-  const activeMatchId = useUIStore((s) => s.activeMatchId);
-  const divisionResults = useResultsStore((s) => s.divisionResults);
-  const dqDivisions = useResultsStore((s) => s.dqDivisions);
-  const fetchByDivision = useResultsStore((s) => s.fetchByDivision);
-
-  const [matchName, setMatchName] = useState('');
-  const [noMatch, setNoMatch] = useState(false);
-  const [resolved, setResolved] = useState(false);
-  const [ready, setReady] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState(() => new Date());
-  const [currentDivision, setCurrentDivision] = useState<string | null>(null);
-  const [cycleId, setCycleId] = useState(0);
-  const [viewportEl, setViewportEl] = useState<HTMLDivElement | null>(null);
-
-  const resolveCurrentMatch = useCallback(async () => {
-    try {
-      const current = await api.getCurrentMatch();
-      if (current?.id) {
-        setNoMatch(false);
-        setMatchName(current.name || '');
-        if (current.id !== useUIStore.getState().activeMatchId) {
-          setActiveMatch(current.id);
-        }
-      } else {
-        setNoMatch(true);
-      }
-    } catch {
-      // Network hiccup — keep whatever we were displaying.
-    } finally {
-      setResolved(true);
-    }
-  }, [setActiveMatch]);
-
-  // The kiosk is a results view; this also makes the shared realtime hook
-  // refresh division results on `score:saved` events.
-  useEffect(() => {
-    setActiveTab('results');
-    void resolveCurrentMatch();
-  }, [setActiveTab, resolveCurrentMatch]);
-
-  // Initial division load whenever the active match changes.
-  useEffect(() => {
-    if (!activeMatchId) {
-      setReady(false);
-      return;
-    }
-    let cancelled = false;
-    setReady(false);
-    fetchByDivision(activeMatchId).finally(() => {
-      if (!cancelled) {
-        setReady(true);
-        setLastRefresh(new Date());
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeMatchId, fetchByDivision]);
-
-  // Fallback poll for live updates (SSE drives the fast path).
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const id = useUIStore.getState().activeMatchId;
-      if (id) {
-        fetchByDivision(id);
-        setLastRefresh(new Date());
-      }
-      void resolveCurrentMatch();
-    }, REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, [fetchByDivision, resolveCurrentMatch]);
-
-  const divisionKeys = useMemo(
-    () => Object.keys(divisionResults).sort((a, b) => a.localeCompare(b)),
-    [divisionResults],
-  );
-
-  const activeDivision = divisionKeys.includes(currentDivision ?? '')
-    ? currentDivision
-    : divisionKeys[0] ?? null;
-
-  useEffect(() => {
-    if (activeDivision && activeDivision !== currentDivision) {
-      setCurrentDivision(activeDivision);
-    }
-  }, [activeDivision, currentDivision]);
-
-  const rows = activeDivision ? divisionResults[activeDivision] ?? [] : [];
-  const dqRows = useMemo(
-    () => (activeDivision ? dqDivisions.filter((d) => d.division === activeDivision) : []),
-    [activeDivision, dqDivisions],
-  );
-
-  const showHitFactor = useMemo(
-    () => Object.values(divisionResults).some((divisionRows) => hasHitFactor(divisionRows)),
-    [divisionResults],
-  );
-  const columns = useMemo(
-    () => (showHitFactor ? DIVISION_COLUMNS : DIVISION_COLUMNS.filter((col) => col !== 'hitFactor')),
-    [showHitFactor],
-  );
-
-  const goNext = useCallback(() => {
-    if (divisionKeys.length === 0) return;
-    setCurrentDivision((prev) => {
-      const index = prev ? divisionKeys.indexOf(prev) : -1;
-      const nextIndex = (index + 1) % divisionKeys.length;
-      return divisionKeys[nextIndex];
-    });
-    setCycleId((c) => c + 1);
-  }, [divisionKeys]);
-
-  useKioskAutoplay({
-    itemKey: `${activeDivision ?? ''}#${cycleId}`,
-    viewport: viewportEl,
-    onAdvance: goNext,
-    enabled: Boolean(activeDivision),
-  });
+  const {
+    matchName,
+    noMatch,
+    resolved,
+    ready,
+    lastRefresh,
+    activeMatchId,
+    divisionKeys,
+    activeDivision,
+    divisionIndex,
+    rows,
+    dqRows,
+    columns,
+    progressValue,
+    setViewportEl,
+  } = usePublicResultsKiosk();
 
   if (noMatch || (resolved && !activeMatchId)) {
     return (
@@ -191,8 +57,6 @@ export default function PublicResultsKioskView() {
     );
   }
 
-  const divisionIndex = activeDivision ? divisionKeys.indexOf(activeDivision) : -1;
-
   return (
     <KioskShell>
       <header className="flex shrink-0 items-center justify-between gap-8 border-b border-slate-800 px-10 py-5">
@@ -203,7 +67,7 @@ export default function PublicResultsKioskView() {
           <p className="text-xl text-slate-400">{t('results.kioskSubtitle')}</p>
         </div>
         <div className="mx-auto">
-          <MatchProgress size="xl" width="w-80" />
+          <MatchProgress size="xl" width="w-80" variant="kiosk" progressValue={progressValue} />
         </div>
         <div className="shrink-0 text-right">
           <div className="flex items-center justify-end gap-2 text-xl font-semibold text-emerald-400">
@@ -253,7 +117,7 @@ export default function PublicResultsKioskView() {
                     return (
                       <tr
                         key={row.registration_id}
-                        className={`border-b border-slate-800/70  odd:bg-white even:bg-gray-50 odd:dark:bg-slate-900 even:dark:bg-slate-700 `}
+                        className={`border-b border-slate-800/70  odd:bg-slate-900 even:bg-slate-700`}
                       >
                         {columns.map((col) => (
                           <td key={col} className={`${cellClass(col)} ${col === 'position' ? medalClass : 'text-slate-100'}`}>
@@ -313,7 +177,7 @@ export default function PublicResultsKioskView() {
 
 function KioskShell({ children }: { children: ReactNode }) {
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-slate-950 text-slate-100">
+    <div className="dark fixed inset-0 flex flex-col overflow-hidden bg-slate-950 text-slate-100">
       {children}
     </div>
   );

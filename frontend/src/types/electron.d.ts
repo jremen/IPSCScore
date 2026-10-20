@@ -19,6 +19,10 @@ declare global {
       setMenuState: (state: Record<string, any>) => void;
       /** Open a native folder picker dialog. Returns the selected path or null. */
       pickBackupFolder: () => Promise<string | null>;
+      /** Whether the OS power-save blocker (prevent sleep/hibernation) is active. */
+      getPreventSleep: () => Promise<boolean>;
+      /** Enable/disable the OS power-save blocker. Returns the resulting state. */
+      setPreventSleep: (enabled: boolean) => Promise<boolean>;
     };
   }
 }
