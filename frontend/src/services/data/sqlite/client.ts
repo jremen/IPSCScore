@@ -4,19 +4,20 @@ import * as Matches from './matches';
 import * as People from './people';
 import * as Scoring from './scoring';
 import * as Results from './results';
+import * as Transfer from './transfer';
 
 /**
- * The standalone (Android) implementation of the frontend's API surface.
+ * The standalone (Android/iOS) implementation of the frontend's API surface.
  *
  * Every method mirrors `services/api.ts` so components cannot tell which runtime
- * they are on. Features that genuinely need a server — WinMSS import, server-side
- * CSV parsing, folder backups, remote scorer trust — are declared here and fail
- * with an explicit message rather than silently doing nothing.
+ * they are on. Features that genuinely need a server — WinMSS/PSC import,
+ * server-side CSV parsing, folder backups, remote scorer trust — are declared
+ * here and fail with an explicit message rather than silently doing nothing.
  */
 
 class LocalFeatureUnavailableError extends Error {
   constructor(feature: string) {
-    super(`${feature} is not available in the offline Android build yet.`);
+    super(`${feature} is not available in the offline mobile build yet.`);
     this.name = 'LocalFeatureUnavailableError';
   }
 }
@@ -73,10 +74,11 @@ export function createLocalClient() {
     deleteMatch: (id: string) => Matches.deleteMatch(id),
     bulkDeleteMatches: (matchIds: string[]) => Matches.bulkDeleteMatches(matchIds),
 
-    // Match export/import: implemented in a later pass (see docs/android.md).
-    exportMatch: async () => unavailable('Match export'),
+    // IPSCScore JSON works offline; the WinMSS/PSC parsers stay server-side and
+    // their controls are hidden on mobile.
+    exportMatch: (id: string) => Transfer.exportMatch(id),
     exportMatchPsc: async () => unavailable('PSC export'),
-    importMatch: async () => unavailable('Match import'),
+    importMatch: (file: File) => Transfer.importMatch(file),
     importMatchPsc: async () => unavailable('PSC import'),
 
     // ── Stages ───────────────────────────────────────────────────────────
@@ -171,8 +173,9 @@ export function createLocalClient() {
     inspectWinMSS: async () => unavailable('WinMSS inspection'),
 
     // ── Backup ───────────────────────────────────────────────────────────
-    exportBackup: async () => unavailable('Database backup'),
-    importBackup: async () => unavailable('Database restore'),
+    // Full local database as portable JSON (not a PostgreSQL .sql dump).
+    exportBackup: () => Transfer.exportBackup(),
+    importBackup: (file: File) => Transfer.restoreBackup(file),
     getLocalBackupStatus: async () => ({
       folder: '',
       enabled: false,

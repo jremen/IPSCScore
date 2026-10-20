@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next';
 import { useDatabaseBackup } from '../../hooks/useDatabaseBackup';
 import { useTabMenuAction } from '../../hooks/useTabMenuAction';
 import { api } from '../../services/api';
+import { isLocalRuntime } from '../../services/data/platform';
 
 const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron?.();
 
 export default function DatabaseSettings() {
   const { exporting, importing, handleExport, handleImport } = useDatabaseBackup();
   const { t } = useTranslation();
+  // Mobile exports a portable JSON snapshot instead of a PostgreSQL .sql dump.
+  const local = isLocalRuntime();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -176,7 +179,9 @@ export default function DatabaseSettings() {
           </div>
         )}
         <h3 className="text-lg font-semibold dark:text-white">{t('database.title')}</h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">{t('database.description')}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          {local ? t('database.descriptionLocal') : t('database.description')}
+        </p>
 
         <div className="flex gap-3 flex-wrap">
           <Button
@@ -185,7 +190,7 @@ export default function DatabaseSettings() {
             onClick={handleExport}
             disabled={exporting || importing}
           >
-            {exporting ? t('database.exporting') : `📥 ${t('database.export')}`}
+            {exporting ? t('database.exporting') : `📥 ${local ? t('database.exportJson') : t('database.export')}`}
           </Button>
           <Button
             size="sm"
@@ -193,14 +198,14 @@ export default function DatabaseSettings() {
             onClick={handleImportClick}
             disabled={exporting || importing}
           >
-            {importing ? t('database.importing') : `📤 ${t('database.import')}`}
+            {importing ? t('database.importing') : `📤 ${local ? t('database.importJson') : t('database.import')}`}
           </Button>
         </div>
 
         <input
           ref={fileInputRef}
           type="file"
-          accept=".sql"
+          accept={local ? '.json' : '.sql'}
           className="hidden"
           onChange={handleFileSelect}
         />

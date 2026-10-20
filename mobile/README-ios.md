@@ -459,10 +459,13 @@ or filter in Console.app by the process name `App`.
 - **Data location** — SQLite lives in `Library/CapacitorDatabase/ipscscore` (set via
   `iosDatabaseLocation` in `mobile/capacitor.config.ts`). It is invisible to iTunes/Finder
   file sharing and is included in iCloud/iTunes device backups. Deleting the app deletes it.
-- **Exports** — PDF/CSV/HTML files are written to `Documents/IPSCScore/`. `Info.plist` sets
-  `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace`, so that folder is visible in
-  the Files app under **On My iPhone → IPSCScore**. Re-exporting under the same name replaces
-  the previous file.
+- **Exports** — PDF/CSV/HTML results, `.match.json` files and full JSON backups are written to
+  `Documents/IPSCScore/`. `Info.plist` sets `UIFileSharingEnabled` and
+  `LSSupportsOpeningDocumentsInPlace`, so that folder is visible in the Files app under
+  **On My iPhone → IPSCScore**. Re-exporting under the same name replaces the previous file.
+- **Import/restore** — both accept a file from the Files app or iCloud Drive. Restoring a
+  backup replaces every local table atomically and signs you out; the admin password stored in
+  the backup still applies afterwards.
 - **No storage permission prompt** — unlike Android 10 and older, iOS has no
   `WRITE_EXTERNAL_STORAGE` equivalent; writes stay inside the app sandbox.
 - **Admin password** — same local PBKDF2 credential store as Android; default `admin`.
@@ -485,11 +488,13 @@ Fully local, offline, no computer required:
 - hit-factor, net-points and time-based stage ranking, per division
 - overall / division / stage / category / tag results and shooter scorecards
 - PDF / CSV / HTML export to `Documents/IPSCScore/` (Files app)
+- `.match.json` match import/export — the same format as the desktop/web app
+- full JSON backup/restore of the device database (**Settings → Database**)
 - admin password + login
 
-Not yet implemented on the mobile builds (iOS included):
+Not implemented on the mobile builds (iOS included); the controls are hidden:
 
-- WinMSS / CSV import, match JSON export, backup/restore
+- WinMSS import, CSV import/export, Practiscore `.psc` import/export
 - cups aggregation
 - stage images
 
@@ -500,5 +505,6 @@ Details and the remaining work are tracked in [`../docs/android.md`](../docs/and
 ## Uninstall / reinstall
 
 Deleting the app from the home screen (long-press → **Remove App** → **Delete App**) also
-deletes the local SQLite database. There is no backup/restore on mobile yet, so export the
-results you need first. Reinstalling from Xcode over an existing app keeps the database.
+deletes the local SQLite database. Export a full backup first
+(**Settings → Database → Export Backup (.json)**) and restore it the same way on the new
+install. Reinstalling from Xcode over an existing app keeps the database.

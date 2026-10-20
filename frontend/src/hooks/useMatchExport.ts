@@ -2,6 +2,11 @@ import { useState, useCallback } from 'react';
 import { api } from '../services/api';
 import { useUIStore } from '../stores/uiStore';
 import { useTranslation } from 'react-i18next';
+import { saveBlobToDevice } from '../utils/exportUtils';
+
+function safeMatchName(matchName: string): string {
+  return (matchName || 'match').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
+}
 
 export function useMatchExport() {
   const [exporting, setExporting] = useState(false);
@@ -14,15 +19,8 @@ export function useMatchExport() {
     try {
       const blob = await api.exportMatch(matchId);
       const date = new Date().toISOString().slice(0, 10);
-      const safeName = (matchName || 'match').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${safeName}-${date}.match.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const saved = await saveBlobToDevice(blob, `${safeMatchName(matchName)}-${date}.match.json`);
+      if (!saved) throw new Error(t('matches.exportError'));
       addToast(t('matches.exportSuccess'), 'success');
     } catch (err: any) {
       addToast(err.message || t('matches.exportError'), 'error');
@@ -36,15 +34,8 @@ export function useMatchExport() {
     try {
       const blob = await api.exportMatchPsc(matchId);
       const date = new Date().toISOString().slice(0, 10);
-      const safeName = (matchName || 'match').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${safeName}-${date}.psc`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      const saved = await saveBlobToDevice(blob, `${safeMatchName(matchName)}-${date}.psc`);
+      if (!saved) throw new Error(t('matches.exportError'));
       addToast(t('matches.exportSuccess'), 'success');
     } catch (err: any) {
       addToast(err.message || t('matches.exportError'), 'error');

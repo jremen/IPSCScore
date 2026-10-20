@@ -2,6 +2,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-rea
 import { useTranslation } from 'react-i18next';
 import { useMatchExport } from '../../hooks/useMatchExport';
 import { useEscClose } from '../../hooks/useEscClose';
+import { isLocalRuntime } from '../../services/data/platform';
 
 interface ExportMatchModalProps {
   show: boolean;
@@ -13,6 +14,9 @@ interface ExportMatchModalProps {
 export default function ExportMatchModal({ show, onClose, matchId, matchName }: ExportMatchModalProps) {
   const { t } = useTranslation();
   const { exporting, handleExport, handleExportPsc } = useMatchExport();
+  // The PSC exporter is server-side; the standalone mobile builds only produce
+  // the native IPSCScore JSON format.
+  const local = isLocalRuntime();
   useEscClose(onClose);
 
   const handleNative = () => {
@@ -44,19 +48,21 @@ export default function ExportMatchModal({ show, onClose, matchId, matchName }: 
               </div>
             </div>
           </Button>
-          <Button
-            color="light"
-            onClick={handlePsc}
-            disabled={exporting}
-            className="justify-start px-4! py-6!"
-          >
-            <div className="text-left">
-              <div className="font-semibold">{t('matches.exportFormatPsc')}</div>
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                Practiscore .psc
+          {!local && (
+            <Button
+              color="light"
+              onClick={handlePsc}
+              disabled={exporting}
+              className="justify-start px-4! py-6!"
+            >
+              <div className="text-left">
+                <div className="font-semibold">{t('matches.exportFormatPsc')}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Practiscore .psc
+                </div>
               </div>
-            </div>
-          </Button>
+            </Button>
+          )}
         </div>
         {exporting && (
           <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
