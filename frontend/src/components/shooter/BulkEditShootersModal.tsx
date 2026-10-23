@@ -1,63 +1,20 @@
-import { useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Alert } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../services/api';
-import { useShooterStore } from '../../stores/shooterStore';
-import BulkEditFormFields, { type BulkEditForm } from '../shared/BulkEditFormFields';
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface BulkEditShootersModalProps {
-  show: boolean;
-  onClose: () => void;
-  selectedIds: string[];
-  onSaved: () => void;
-}
+import BulkEditFormFields from '../shared/BulkEditFormFields';
+import { useBulkEditShootersModal } from '../../hooks/useBulkEditShootersModal';
+import type { BulkEditShootersModalProps } from './types';
 
 export default function BulkEditShootersModal({ show, onClose, selectedIds, onSaved }: BulkEditShootersModalProps) {
   const { t } = useTranslation();
-  const bulkUpdate = useShooterStore((s) => s.bulkUpdateShooters);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ updated: number; failed: Array<{ id: string; reason: string }> } | null>(null);
-  const [form, setForm] = useState<BulkEditForm>({
-    changeDivision: false, division: 'standard',
-    changeCategory: false, category: 'regular',
-    changePowerFactor: false, powerFactor: 'minor',
-    changeTag: false, tag: '',
-    changeSquad: false, squad: '',
-  });
-
-  const handleClose = () => {
-    setResult(null);
-    setForm({ changeDivision: false, division: 'standard', changeCategory: false, category: 'regular', changePowerFactor: false, powerFactor: 'minor', changeTag: false, tag: '', changeSquad: false, squad: '' });
-    onClose();
-  };
-  useEscClose(handleClose);
-
-  const handleSave = async () => {
-    const updates: Record<string, string | null> = {};
-    if (form.changeDivision) updates.division = form.division;
-    if (form.changeCategory) updates.category = form.category;
-    if (form.changePowerFactor) updates.power_factor = form.powerFactor;
-    if (form.changeTag) updates.tag = form.tag || null;
-    if (Object.keys(updates).length === 0) return;
-
-    setLoading(true);
-    try {
-      const res = await api.bulkUpdateShooters(selectedIds, updates);
-      setResult(res);
-      if (res.failed.length === 0) {
-        bulkUpdate(selectedIds, updates);
-        onSaved();
-        setTimeout(handleClose, 1500);
-      }
-    } catch (err: any) {
-      setResult({ updated: 0, failed: [{ id: '', reason: err.message || t('common.unknownError') }] });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const hasChanges = form.changeDivision || form.changeCategory || form.changePowerFactor || form.changeTag;
+  const {
+    form,
+    setForm,
+    hasChanges,
+    loading,
+    result,
+    handleSave,
+    handleClose,
+  } = useBulkEditShootersModal({ selectedIds, onClose, onSaved });
 
   return (
     <Modal show={show} onClose={handleClose} size="lg">
@@ -74,8 +31,8 @@ export default function BulkEditShootersModal({ show, onClose, selectedIds, onSa
               <Alert color="warning">
                 <p className="font-medium mb-1">{t('bulkEdit.partialSuccess', { updated: result.updated, failed: result.failed.length })}</p>
                 <ul className="text-sm list-disc pl-4">
-                  {result.failed.map((f, i) => (
-                    <li key={i}>{f.id}: {f.reason}</li>
+                  {result.failed.map((failure, index) => (
+                    <li key={index}>{failure.id}: {failure.reason}</li>
                   ))}
                 </ul>
               </Alert>
@@ -83,9 +40,7 @@ export default function BulkEditShootersModal({ show, onClose, selectedIds, onSa
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t('bulkEdit.selectFields')}
-            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t('bulkEdit.selectFields')}</p>
             <BulkEditFormFields form={form} onChange={setForm} />
           </div>
         )}

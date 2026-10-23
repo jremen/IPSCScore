@@ -1,11 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { HelpSection } from '../../config/helpSections';
-
-interface HelpSidebarProps {
-  sections: HelpSection[];
-  activeId: string;
-  onSelect: (id: string) => void;
-}
+import type { HelpSidebarProps } from './types';
 
 export default function HelpSidebar({ sections, activeId, onSelect }: HelpSidebarProps) {
   const { t } = useTranslation();

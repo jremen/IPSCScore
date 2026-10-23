@@ -1,161 +1,51 @@
-import { useMemo, useCallback } from 'react';
 import { Alert, Badge, Label } from 'flowbite-react';
 import TimeInput from '../shared/TimeInput';
 import { useScoringStore } from '../../../stores/scoringStore';
-import { useScoreDataUpdater } from '../../../hooks/useScoreDataUpdater';
 import { useDeviceContext } from '../../../hooks/useDeviceContext';
 import { useScoringReadOnly } from '../../../hooks/useScoringReadOnly';
-import { calculateIDPAPreview } from '../../../utils/scoring';
 import { HitCell, ScoringSheetHeader, DnfToggle, DqSection, PenaltyStepper } from '../shared';
 import IDPAScorePreviewCard from './IDPAScorePreviewCard';
-import type { Stage } from '../../../types/stage';
-import type { ScoreInput, TargetScore } from '../../../types/scoring';
-import { useTranslation } from "react-i18next";
+import { useIDPAScoring } from '../../../hooks/useIDPAScoring';
+import type { ScoringSheetProps } from '../types';
+import { useTranslation } from 'react-i18next';
 
-interface Props {
-  stage: Stage;
-  score: ScoreInput;
-}
-
-export default function IDPAScoringSheet({ stage, score }: Props) {
+export default function IDPAScoringSheet({ stage, score }: ScoringSheetProps) {
   const { t, i18n } = useTranslation();
   const { isDesktop } = useDeviceContext();
-  const setScore = useScoringStore((s) => s.setScore);
   const alerts = useScoringStore((s) => s.alerts);
-  const { sd, updateScoreData } = useScoreDataUpdater(score);
-  const shooter = useScoringStore(s => s.registrations.find(r => r.id === s.currentRegistrationId));
+  const shooter = useScoringStore((s) => s.registrations.find((registration) => registration.id === s.currentRegistrationId));
   const isReadOnly = useScoringReadOnly();
-
-  const hpp = stage.hits_per_paper;
-  const penalty_pe = sd.penalty_pe || 0;
-  const penalty_hnt = sd.penalty_hnt || 0;
-  const penalty_ftn = sd.penalty_ftn || 0;
-  const penalty_fp = sd.penalty_fp || 0;
-  const penalty_ftdr = sd.penalty_ftdr || 0;
-
-  const paperTargets = useMemo(
-    () => score.targets.filter(t => t.target_type === 'paper').sort((a, b) => a.target_index - b.target_index),
-    [score.targets]
-  );
-  const steelTargets = useMemo(() => score.targets.filter(t => t.target_type === 'steel'), [score.targets]);
-  const steelMisses = useMemo(() => steelTargets.filter(t => !t.steel_hit).length, [steelTargets]);
-
-  const isTargetFinished = useCallback((target: TargetScore) => {
-    const totalHits = target.alpha + target.charlie + target.delta + target.miss;
-    return totalHits >= hpp;
-  }, [hpp]);
-
-  const handlePaperHitClick = useCallback((targetIndex: number, field: 'alpha' | 'charlie' | 'delta') => {
-    const newTargets = score.targets.map(t => {
-      if (t.target_type !== 'paper' || t.target_index !== targetIndex) return t;
-      const total = t.alpha + t.charlie + t.delta + t.miss;
-      if (total < hpp) return { ...t, [field]: t[field] + 1 };
-      const stealOrder: Array<'alpha' | 'charlie' | 'delta' | 'miss'> = ['alpha', 'charlie', 'delta', 'miss'];
-      for (const stealFrom of stealOrder) {
-        if (stealFrom !== field && t[stealFrom] > 0) {
-          return { ...t, [stealFrom]: t[stealFrom] - 1, [field]: t[field] + 1 };
-        }
-      }
-      return t;
-    });
-    setScore({ ...score, targets: newTargets });
-  }, [score, hpp, setScore]);
-
-  const handlePaperMissClick = useCallback((targetIndex: number) => {
-    const newTargets = score.targets.map(t => {
-      if (t.target_type !== 'paper' || t.target_index !== targetIndex) return t;
-      const total = t.alpha + t.charlie + t.delta + t.miss;
-      if (total >= hpp) {
-        const stealOrder: Array<'alpha' | 'charlie' | 'delta'> = ['alpha', 'charlie', 'delta'];
-        for (const stealFrom of stealOrder) {
-          if (t[stealFrom] > 0) return { ...t, [stealFrom]: t[stealFrom] - 1, miss: t.miss + 1 };
-        }
-        return t;
-      }
-      return { ...t, miss: t.miss + 1 };
-    });
-    setScore({ ...score, targets: newTargets });
-  }, [score, hpp, setScore]);
-
-  const handlePaperDecrement = useCallback((targetIndex: number, field: 'alpha' | 'charlie' | 'delta' | 'miss') => {
-    const newTargets = score.targets.map(t => {
-      if (t.target_type !== 'paper' || t.target_index !== targetIndex) return t;
-      return { ...t, [field]: Math.max(0, t[field] - 1) };
-    });
-    setScore({ ...score, targets: newTargets });
-  }, [score, setScore]);
-
-  const handlePaperNSClick = useCallback((targetIndex: number, delta: number) => {
-    const newTargets = score.targets.map(t => {
-      if (t.target_type !== 'paper' || t.target_index !== targetIndex) return t;
-      return { ...t, no_shoot_hits: Math.max(0, t.no_shoot_hits + delta) };
-    });
-    setScore({ ...score, targets: newTargets });
-  }, [score, setScore]);
-
-  const handleResetTarget = useCallback((targetIndex: number) => {
-    const newTargets = score.targets.map(t => {
-      if (t.target_type !== 'paper' || t.target_index !== targetIndex) return t;
-      return { ...t, alpha: 0, charlie: 0, delta: 0, miss: 0, no_shoot_hits: 0 };
-    });
-    setScore({ ...score, targets: newTargets });
-  }, [score, setScore]);
-
-  const handleSteelMissChange = useCallback((newMisses: number) => {
-    const clamped = Math.max(0, Math.min(newMisses, steelTargets.length));
-    const hits = steelTargets.length - clamped;
-    const newTargets = score.targets.map(t => {
-      if (t.target_type !== 'steel') return t;
-      const idx = t.target_index - stage.paper_targets - 1;
-      return { ...t, steel_hit: idx < hits };
-    });
-    setScore({ ...score, targets: newTargets });
-  }, [steelTargets.length, score, stage.paper_targets, setScore]);
-
-  const handleTimeChange = useCallback((value: number | null) => {
-    const currentScore = useScoringStore.getState().currentScore;
-    if (currentScore) {
-      setScore({ ...currentScore, time: value });
-    }
-  }, [setScore]);
-
-  const handleResetAll = () => {
-    const resetTargets = score.targets.map(t => ({
-      ...t, alpha: 0, charlie: 0, delta: 0, miss: 0, no_shoot_hits: 0,
-      steel_hit: t.target_type === 'steel' ? true : t.steel_hit,
-    }));
-    setScore({
-      ...score, time: null, targets: resetTargets,
-      procedural_count: 0, ftsa_count: 0, extra_shot_count: 0, extra_hit_count: 0,
-      stacking_count: 0, overtime_shot_count: 0, is_dnf: false,
-      score_data: { penalty_pe: 0, penalty_hnt: 0, penalty_ftn: 0, penalty_fp: 0, penalty_ftdr: 0 },
-    });
-  };
-
-  const preview = calculateIDPAPreview({
-    targets: score.targets.map(t => ({
-      ...t, hits_per_paper: stage.hits_per_paper,
-    })),
-    time: score.time || 0,
-    penalty_pe, penalty_hnt, penalty_ftn, penalty_fp, penalty_ftdr,
-  });
-
-  const penalties = [
-    { key: 'penalty_pe' as const, label: t('scoring.peProcedural'), sec: 3 },
-    { key: 'penalty_hnt' as const, label: t('scoring.hntHitNs'), sec: 5 },
-    { key: 'penalty_ftn' as const, label: t('scoring.ftnFailNeutralize'), sec: 5 },
-    { key: 'penalty_fp' as const, label: t('scoring.fpFlagrant'), sec: 10 },
-  ];
+  const {
+    hpp,
+    sd,
+    paperTargets,
+    steelTargets,
+    steelMisses,
+    isTargetFinished,
+    handlePaperHitClick,
+    handlePaperMissClick,
+    handlePaperDecrement,
+    handlePaperNSClick,
+    handleResetTarget,
+    handleSteelMissChange,
+    handleTimeChange,
+    handleResetAll,
+    handleDnfToggle,
+    handlePenaltyChange,
+    handlePenaltyIncrement,
+    handleFtdrChange,
+    preview,
+    penalties,
+    penalty_ftdr,
+  } = useIDPAScoring(stage, score);
 
   return (
     <div className="p-2 sm:p-4 max-w-7xl mx-auto lg:grid grid-cols-2 gap-6">
-      {/* MOBILE: time input at top */}
       <div className="lg:hidden max-lg:mb-3 max-lg:p-3 max-lg:dark:bg-gray-800 max-lg:rounded-lg max-lg:border max-lg:border-gray-200 max-lg:dark:border-gray-700">
         <Label className="text-sm font-bold mb-1 block">{t('scoring.time')}</Label>
         <TimeInput value={score.time} onChange={handleTimeChange} disabled={isReadOnly} className="py-1!" />
       </div>
 
-      {/* LEFT COLUMN: scoring sheet card */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 max-lg:mb-3 shadow-sm -order-1">
         <ScoringSheetHeader
           title={t('scoring.idpaTitle')}
@@ -168,7 +58,6 @@ export default function IDPAScoringSheet({ stage, score }: Props) {
           <p className="text-sm text-gray-500 dark:text-gray-300 px-3 my-1">{t('scoring.mobileInstruction')}</p>
         )}
 
-        {/* PAPER TARGETS — IDPA labels: -0, -1, -3 */}
         {paperTargets.length > 0 && (
           <div className="p-3 border-b border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-2 mb-2">
@@ -188,27 +77,32 @@ export default function IDPAScoringSheet({ stage, score }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {paperTargets.map((target, idx) => {
-                    const finished = isTargetFinished(target);
-                    return (
-                      <tr key={target.target_index} className={`text-center border-t border-gray-100 dark:border-gray-700 transition-colors ${finished ? 'bg-green-50 dark:bg-green-900/60' : ''}`}>
-                        <td className="py-1.5">
-                          <button className={`font-mono text-sm font-bold ${isReadOnly ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-red-500 cursor-pointer'}`} onClick={isReadOnly ? undefined : () => handleResetTarget(target.target_index)} disabled={isReadOnly}>{idx + 1}</button>
-                        </td>
-                        <td className="py-1.5"><div className="flex justify-center"><HitCell value={target.alpha} color="green" onIncrement={() => handlePaperHitClick(target.target_index, 'alpha')} onDecrement={() => handlePaperDecrement(target.target_index, 'alpha')} disabled={isReadOnly} /></div></td>
-                        <td className="py-1.5"><div className="flex justify-center"><HitCell value={target.charlie} color="yellow" onIncrement={() => handlePaperHitClick(target.target_index, 'charlie')} onDecrement={() => handlePaperDecrement(target.target_index, 'charlie')} disabled={isReadOnly} /></div></td>
-                        <td className="py-1.5"><div className="flex justify-center"><HitCell value={target.delta} color="orange" onIncrement={() => handlePaperHitClick(target.target_index, 'delta')} onDecrement={() => handlePaperDecrement(target.target_index, 'delta')} disabled={isReadOnly} /></div></td>
-                        <td className="py-1.5"><div className="flex justify-center"><HitCell value={target.miss} color="red" onIncrement={() => handlePaperMissClick(target.target_index)} onDecrement={() => handlePaperDecrement(target.target_index, 'miss')} disabled={isReadOnly} /></div></td>
-                        <td className="py-1.5"><div className="flex justify-center">
+                  {paperTargets.map((target, index) => (
+                    <tr key={target.target_index} className={`text-center border-t border-gray-100 dark:border-gray-700 transition-colors ${isTargetFinished(target) ? 'bg-green-50 dark:bg-green-900/60' : ''}`}>
+                      <td className="py-1.5">
+                        <button
+                          className={`font-mono text-sm font-bold ${isReadOnly ? 'text-gray-400 cursor-not-allowed' : 'text-gray-500 hover:text-red-500 cursor-pointer'}`}
+                          onClick={isReadOnly ? undefined : () => handleResetTarget(target.target_index)}
+                          disabled={isReadOnly}
+                        >
+                          {index + 1}
+                        </button>
+                      </td>
+                      <td className="py-1.5"><div className="flex justify-center"><HitCell value={target.alpha} color="green" onIncrement={() => handlePaperHitClick(target.target_index, 'alpha')} onDecrement={() => handlePaperDecrement(target.target_index, 'alpha')} disabled={isReadOnly} /></div></td>
+                      <td className="py-1.5"><div className="flex justify-center"><HitCell value={target.charlie} color="yellow" onIncrement={() => handlePaperHitClick(target.target_index, 'charlie')} onDecrement={() => handlePaperDecrement(target.target_index, 'charlie')} disabled={isReadOnly} /></div></td>
+                      <td className="py-1.5"><div className="flex justify-center"><HitCell value={target.delta} color="orange" onIncrement={() => handlePaperHitClick(target.target_index, 'delta')} onDecrement={() => handlePaperDecrement(target.target_index, 'delta')} disabled={isReadOnly} /></div></td>
+                      <td className="py-1.5"><div className="flex justify-center"><HitCell value={target.miss} color="red" onIncrement={() => handlePaperMissClick(target.target_index)} onDecrement={() => handlePaperDecrement(target.target_index, 'miss')} disabled={isReadOnly} /></div></td>
+                      <td className="py-1.5">
+                        <div className="flex justify-center">
                           {stage.no_shoot_targets > 0 ? (
                             <HitCell value={target.no_shoot_hits} color="red" onIncrement={() => handlePaperNSClick(target.target_index, 1)} onDecrement={() => handlePaperNSClick(target.target_index, -1)} disabled={isReadOnly} />
                           ) : (
                             <button className="w-11 h-11 rounded-lg flex items-center justify-center font-mono text-xl font-bold bg-gray-50 dark:bg-gray-700/50 text-gray-300 dark:text-gray-500 ring-1 ring-gray-200 dark:ring-gray-600 cursor-not-allowed" disabled>0</button>
                           )}
-                        </div></td>
-                      </tr>
-                    );
-                  })}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -218,7 +112,6 @@ export default function IDPAScoringSheet({ stage, score }: Props) {
           </div>
         )}
 
-        {/* STEEL TARGETS */}
         {steelTargets.length > 0 && (
           <div className="p-3 border-b border-gray-100 dark:border-gray-700">
             <div className="flex items-center gap-2 mb-2">
@@ -243,7 +136,6 @@ export default function IDPAScoringSheet({ stage, score }: Props) {
           </div>
         )}
 
-        {/* IDPA PENALTIES */}
         <div className="p-3 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wide">{t('scoring.idpaPenalties')}</span>
@@ -254,8 +146,8 @@ export default function IDPAScoringSheet({ stage, score }: Props) {
                 <Label className="text-xs">{label} <span className="text-gray-400">{t('scoring.secondsEach', { sec })}</span></Label>
                 <PenaltyStepper
                   value={(sd[key] as number) || 0}
-                  onDecrement={() => updateScoreData({ [key]: Math.max(0, ((sd[key] as number) || 0) - 1) })}
-                  onIncrement={() => updateScoreData({ [key]: ((sd[key] as number) || 0) + 1 })}
+                  onDecrement={() => handlePenaltyChange(key, -1)}
+                  onIncrement={() => handlePenaltyIncrement(key)}
                   color="orange"
                   size="sm"
                   disabled={isReadOnly}
@@ -266,8 +158,8 @@ export default function IDPAScoringSheet({ stage, score }: Props) {
               <Label className="text-xs">{t('scoring.ftdrFailToDoRight')} <span className="text-gray-400">{t('scoring.secondsEach', { sec: 20 })}</span></Label>
               <PenaltyStepper
                 value={penalty_ftdr}
-                onDecrement={() => updateScoreData({ penalty_ftdr: Math.max(0, penalty_ftdr - 1) })}
-                onIncrement={() => updateScoreData({ penalty_ftdr: penalty_ftdr + 1 })}
+                onDecrement={() => handleFtdrChange(-1)}
+                onIncrement={() => handleFtdrChange(1)}
                 color="red"
                 size="sm"
                 disabled={isReadOnly}
@@ -277,24 +169,22 @@ export default function IDPAScoringSheet({ stage, score }: Props) {
         </div>
       </div>
 
-      {/* RIGHT COLUMN (desktop only): Time, DNF/DQ, Preview */}
       <div className="lg:flex flex-col gap-6 mb-16">
         <div className="max-lg:hidden max-lg:p-3 max-lg:dark:bg-gray-800 max-lg:rounded-lg max-lg:border max-lg:border-gray-200 max-lg:dark:border-gray-700">
           <Label className="text-sm font-bold mb-1 block">{t('scoring.time')}</Label>
           <TimeInput value={score.time} onChange={handleTimeChange} disabled={isReadOnly} className="py-1!" />
         </div>
         <div className="flex items-center gap-4 mb-3 flex-wrap">
-          <DnfToggle isDnf={score.is_dnf} onToggle={() => setScore({ ...score, is_dnf: !score.is_dnf })} disabled={isReadOnly} />
+          <DnfToggle isDnf={score.is_dnf} onToggle={handleDnfToggle} disabled={isReadOnly} />
           <DqSection shooter={shooter} disabled={isReadOnly} />
         </div>
         <IDPAScorePreviewCard raw_points={preview.raw_points} total_time={preview.total_time || 0} />
       </div>
 
-      {/* Alerts below the grid */}
       {alerts.length > 0 && (
         <div className="space-y-2 mb-3">
-          {alerts.map((alert, i) => (
-            <Alert key={i} color={alert.type === 'error' ? 'failure' : 'warning'}>{alert.message}</Alert>
+          {alerts.map((alert, index) => (
+            <Alert key={index} color={alert.type === 'error' ? 'failure' : 'warning'}>{alert.message}</Alert>
           ))}
         </div>
       )}

@@ -1,97 +1,34 @@
-import { useState, useEffect } from 'react';
 import { Button } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useUIStore } from '../../stores/uiStore';
-import { api } from '../../services/api';
 import CSVImportModal from './CSVImportModal';
 import { TbFileImport, TbFileExport } from 'react-icons/tb';
-import { onMenuAction } from '../../hooks/useMenuActions';
-import { isLocalRuntime } from '../../services/data/platform';
+import { useCsvImportExport } from '../../hooks/useCsvImportExport';
+import type { CsvImportExportProps } from './types';
 
-interface Props {
-  type: 'shooters' | 'registrations' | 'scores';
-  matchId?: string;
-  onImportComplete?: () => void;
-}
-
-export default function CSVImportExport({ type, matchId, onImportComplete }: Props) {
-  const { t } = useTranslation();
-  const addToast = useUIStore((s) => s.addToast);
-  const [show, setShow] = useState(false);
-  const [exporting, setExporting] = useState(false);
-  // CSV parsing lives in the backend. The standalone Android/iOS builds have no
-  // server, so the import/export buttons are not offered there at all.
-  const local = isLocalRuntime();
-
-  const label = t('common.import');
-
-  useEffect(() => {
-    if (local) return;
-    const action = type === 'shooters' ? 'import-shooters-csv' : type === 'registrations' ? 'import-registrations-csv' : null;
-    if (!action) return;
-    return onMenuAction(action, () => {
-      if (type === 'registrations' && !matchId) return;
-      setShow(true);
-    });
-  }, [type, matchId, local]);
-
-  const handleExportShooters = async () => {
-    setExporting(true);
-    try {
-      const csv = await api.exportShootersCSV();
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'shooters.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-      addToast(t('import.csvExported'), 'success');
-    } catch (err: any) {
-      addToast(err.message, 'error');
-    } finally {
-      setExporting(false);
-    }
-  };
-
-  const handleExportRegistrations = async () => {
-    if (!matchId) return;
-    setExporting(true);
-    try {
-      const csv = await api.exportRegistrationCSV(matchId);
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `registrations_${matchId}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-      addToast(t('import.csvExported'), 'success');
-    } catch (err: any) {
-      addToast(err.message, 'error');
-    } finally {
-      setExporting(false);
-    }
-  };
+export default function CSVImportExport({ type, matchId, onImportComplete }: CsvImportExportProps) {
+  const { t, local, show, exporting, open, close, exportShooters, exportRegistrations } =
+    useCsvImportExport({ type, matchId });
 
   if (local) return null;
 
   return (
     <>
-      <Button size="sm" color="light" onClick={() => setShow(true)}><TbFileImport className="mr-2 size-4" />{label}</Button>
+      <Button size="sm" color="light" onClick={open}>
+        <TbFileImport className="mr-2 size-4" />
+        {t('common.import')}
+      </Button>
       {type === 'shooters' && (
-        <Button size="sm" color="light" onClick={handleExportShooters} disabled={exporting}>
+        <Button size="sm" color="light" onClick={exportShooters} disabled={exporting}>
           <TbFileExport className="mr-2 size-4" />
           {exporting ? t('import.exporting') : t('common.export')}
         </Button>
       )}
       {type === 'registrations' && matchId && (
-        <Button size="sm" color="light" onClick={handleExportRegistrations} disabled={exporting}>
+        <Button size="sm" color="light" onClick={exportRegistrations} disabled={exporting}>
           <TbFileExport className="mr-2 size-4" />
           {exporting ? t('import.exporting') : t('common.export')}
         </Button>
       )}
-      <CSVImportModal show={show} onClose={() => setShow(false)} type={type} matchId={matchId} onImportComplete={onImportComplete} />
+      <CSVImportModal show={show} onClose={close} type={type} matchId={matchId} onImportComplete={onImportComplete} />
     </>
   );
 }

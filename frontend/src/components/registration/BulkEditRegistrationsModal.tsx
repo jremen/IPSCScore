@@ -1,77 +1,22 @@
-import { useEffect, useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Alert } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../services/api';
-import { useMatchStore } from '../../stores/matchStore';
-import BulkEditFormFields, { type BulkEditForm } from '../shared/BulkEditFormFields';
-import { getDefaultDivisionForMatch, getDivisionsForMatch } from '../../utils/constants';
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface BulkEditRegistrationsModalProps {
-  show: boolean;
-  onClose: () => void;
-  selectedIds: string[];
-  matchId: string;
-  onSaved: () => void;
-}
+import BulkEditFormFields from '../shared/BulkEditFormFields';
+import { useBulkEditRegistrationsModal } from '../../hooks/useBulkEditRegistrationsModal';
+import type { BulkEditRegistrationsModalProps } from './types';
 
 export default function BulkEditRegistrationsModal({ show, onClose, selectedIds, matchId, onSaved }: BulkEditRegistrationsModalProps) {
   const { t } = useTranslation();
-  const matches = useMatchStore((s) => s.matches);
-  const match = matches.find((m: any) => m.id === matchId);
-  const matchOrganization = match?.organization;
-  const matchFirearmType = match?.firearm_type;
-  const divisions = getDivisionsForMatch(match);
-  const defaultDivision = getDefaultDivisionForMatch(match) ?? 'standard';
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ updated: number; failed: Array<{ id: string; name: string; reason: string }> } | null>(null);
-  const [form, setForm] = useState<BulkEditForm>({
-    changeDivision: false, division: defaultDivision,
-    changeCategory: false, category: 'regular',
-    changePowerFactor: false, powerFactor: 'minor',
-    changeTag: false, tag: '',
-    changeSquad: false, squad: '',
-  });
-
-  // Refresh the implied division when the modal opens for a different match.
-  useEffect(() => {
-    if (show) {
-      setForm((prev) => ({ ...prev, division: defaultDivision }));
-    }
-  }, [show, defaultDivision]);
-
-  const handleClose = () => {
-    setResult(null);
-    setForm({ changeDivision: false, division: defaultDivision, changeCategory: false, category: 'regular', changePowerFactor: false, powerFactor: 'minor', changeTag: false, tag: '', changeSquad: false, squad: '' });
-    onClose();
-  };
-  useEscClose(handleClose);
-
-  const handleSave = async () => {
-    const updates: Record<string, any> = {};
-    if (form.changeDivision) updates.division = form.division;
-    if (form.changeCategory) updates.category = form.category;
-    if (form.changePowerFactor) updates.power_factor = form.powerFactor;
-    if (form.changeTag) updates.tag = form.tag || null;
-    if (form.changeSquad) updates.squad = form.squad ? parseInt(form.squad) : null;
-    if (Object.keys(updates).length === 0) return;
-
-    setLoading(true);
-    try {
-      const res = await api.bulkUpdateRegistrations(matchId, selectedIds, updates);
-      setResult(res);
-      if (res.failed.length === 0) {
-        onSaved();
-        setTimeout(handleClose, 1500);
-      }
-    } catch (err: any) {
-      setResult({ updated: 0, failed: [{ id: '', name: '', reason: err.message || t('common.unknownError') }] });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const hasChanges = form.changeDivision || form.changeCategory || form.changePowerFactor || form.changeTag || form.changeSquad;
+  const {
+    form,
+    setForm,
+    divisions,
+    match,
+    hasChanges,
+    loading,
+    result,
+    handleSave,
+    handleClose,
+  } = useBulkEditRegistrationsModal({ matchId, selectedIds, onClose, onSaved });
 
   return (
     <Modal show={show} onClose={handleClose} size="lg">
@@ -88,8 +33,8 @@ export default function BulkEditRegistrationsModal({ show, onClose, selectedIds,
               <Alert color="warning">
                 <p className="font-medium mb-1">{t('bulkEdit.partialSuccess', { updated: result.updated, failed: result.failed.length })}</p>
                 <ul className="text-sm list-disc pl-4">
-                  {result.failed.map((f, i) => (
-                    <li key={i}>{f.name || f.id}: {f.reason}</li>
+                  {result.failed.map((failure, index) => (
+                    <li key={index}>{failure.name || failure.id}: {failure.reason}</li>
                   ))}
                 </ul>
               </Alert>
@@ -97,10 +42,15 @@ export default function BulkEditRegistrationsModal({ show, onClose, selectedIds,
           </div>
         ) : (
           <div className="space-y-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              {t('bulkEdit.selectFields')}
-            </p>
-            <BulkEditFormFields form={form} onChange={setForm} showSquad showDivision={divisions.length > 0} organization={matchOrganization} firearmType={matchFirearmType} />
+            <p className="text-sm text-gray-600 dark:text-gray-400">{t('bulkEdit.selectFields')}</p>
+            <BulkEditFormFields
+              form={form}
+              onChange={setForm}
+              showSquad
+              showDivision={divisions.length > 0}
+              organization={match?.organization}
+              firearmType={match?.firearm_type}
+            />
           </div>
         )}
       </ModalBody>

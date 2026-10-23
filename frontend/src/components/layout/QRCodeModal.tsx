@@ -1,80 +1,16 @@
-import { useState, useCallback } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useLanUrl } from '../../hooks/useLanUrl';
-import { useQRCode } from '../../hooks/useQRCode';
-import { useUIStore } from '../../stores/uiStore';
-import { generateSingleQrPdf } from '../../utils/qrPdf';
-import { saveBlobToDevice } from '../../utils/exportUtils';
-import { triggerPrint } from '../../utils/print';
-import { useEscClose } from '../../hooks/useEscClose';
 import { BsPrinter, BsFilePdf, BsCopy, BsCheckCircle } from 'react-icons/bs';
+import { useQRCodeModal } from '../../hooks/useQRCodeModal';
+import type { QRCodeModalProps } from './types';
 
-export type QRCodeModalMode = 'results' | 'scoring' | 'squads';
+export type { QRCodeModalMode } from './types';
 
-interface QRCodeModalProps {
-  show: boolean;
-  onClose: () => void;
-  mode: QRCodeModalMode;
-}
-
-export default function QRCodeModal({ show, onClose, mode }: QRCodeModalProps) {
-  const { domainUrls } = useLanUrl();
-  const { t } = useTranslation();
-  useEscClose(show ? onClose : undefined);
-
-  const isResults = mode === 'results';
-  const isSquads = mode === 'squads';
-  const url = isResults ? (domainUrls?.results ?? '') : isSquads ? (domainUrls?.squads ?? '') : (domainUrls?.scoring ?? '');
-  // On-screen label keeps the descriptive text; print/PDF uses the short name.
-  const label = isResults ? t('header.qrResultsLabel') : isSquads ? t('header.qrSquadsLabel') : t('header.qrScoringLabel');
-  const printLabel = isResults ? t('header.qrResultsLink') : isSquads ? t('header.qrSquadsLink') : t('header.qrScoringLink');
-  const emoji = isResults ? '🏆' : isSquads ? '📋' : '🎯';
-
-  const qr = useQRCode(url, { width: 512, margin: 2 });
-  const [copied, setCopied] = useState(false);
-  const addToast = useUIStore((s) => s.addToast);
-
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback: select text
-      const el = document.createElement('textarea');
-      el.value = url;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [url]);
-
-  const handlePrint = useCallback(() => {
-    triggerPrint();
-  }, []);
-
-  const handlePdf = useCallback(async () => {
-    if (!qr || !url) return;
-    try {
-      const doc = await generateSingleQrPdf({
-        url,
-        qr,
-        label: printLabel,
-      });
-      const saved = await saveBlobToDevice(doc.output('blob'), `ipsc-score-${mode}-qr-code.pdf`);
-      addToast(t(saved ? 'results.pdfExported' : 'results.exportFailed'), saved ? 'success' : 'error');
-    } catch (err) {
-      console.error('Failed to generate QR PDF:', err);
-      addToast(t('results.exportFailed'), 'error');
-    }
-  }, [qr, url, label, mode, printLabel, addToast, t]);
+export default function QRCodeModal(props: QRCodeModalProps) {
+  const { t, url, label, printLabel, emoji, qr, copied, handleCopy, handlePrint, handlePdf } =
+    useQRCodeModal(props);
 
   return (
-    <Modal show={show} onClose={onClose} size="xl" dismissible>
+    <Modal show={props.show} onClose={props.onClose} size="xl" dismissible>
       <ModalHeader>{t('header.qrTitle')}</ModalHeader>
       <ModalBody>
         <div className="flex flex-col items-center text-center">
@@ -102,7 +38,6 @@ export default function QRCodeModal({ show, onClose, mode }: QRCodeModalProps) {
           </div>
         </div>
 
-        {/* Print-only overlay */}
         <div className="hidden print:block fixed inset-0 z-9999 bg-white p-8">
           <div className="flex flex-col items-center justify-start h-full">
             <div className="flex flex-col items-center w-full">
@@ -124,7 +59,7 @@ export default function QRCodeModal({ show, onClose, mode }: QRCodeModalProps) {
           <BsFilePdf className="mr-2 size-5" />
           {t('header.downloadQrPdf')}
         </Button>
-        <Button color="gray" onClick={onClose}>
+        <Button color="gray" onClick={props.onClose}>
           {t('common.close')}
         </Button>
       </ModalFooter>

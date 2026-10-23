@@ -1,63 +1,21 @@
-import { useEffect, useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { useUIStore } from '../../stores/uiStore';
-import { useMatchStore } from '../../stores/matchStore';
-import { useShooterStore } from '../../stores/shooterStore';
-import { api } from '../../services/api';
-import ShooterFormFields, { type ShooterFormData } from '../shared/ShooterFormFields';
-import { getDefaultDivisionForMatch, getDivisionsForMatch } from '../../utils/constants';
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface CreateShooterModalProps {
-  show: boolean;
-  onClose: () => void;
-  matchId: string;
-  onCreated: () => void;
-}
+import ShooterFormFields from '../shared/ShooterFormFields';
+import { useCreateShooterModal } from '../../hooks/useCreateShooterModal';
+import type { CreateShooterModalProps } from './types';
 
 export default function CreateShooterModal({ show, onClose, matchId, onCreated }: CreateShooterModalProps) {
-  const addToast = useUIStore((s) => s.addToast);
-  const matches = useMatchStore((s) => s.matches);
-  const fetchShooters = useShooterStore((s) => s.fetchShooters);
   const { t } = useTranslation();
-  useEscClose(onClose);
-  const match = matches.find((m: any) => m.id === matchId);
-  const matchOrganization = match?.organization;
-  const matchFirearmType = match?.firearm_type;
-  const divisions = getDivisionsForMatch(match);
-  const defaultDivision = getDefaultDivisionForMatch(match) ?? 'standard';
-  const [squad, setSquad] = useState('');
-  const [form, setForm] = useState<ShooterFormData>({
-    first_name: '', last_name: '', category: 'regular', tag: null,
-    division: defaultDivision, power_factor: 'minor', region: '', email: null,
-  });
-
-  // Reopening the modal (or switching matches) must not keep a division from
-  // the previous match — NRL22, for example, defaults to `irons`.
-  useEffect(() => {
-    if (show) {
-      setForm((previous) => ({ ...previous, division: defaultDivision }));
-    }
-  }, [show, matchId, defaultDivision]);
-
-  const handleCreate = async () => {
-    if (!form.first_name || !form.last_name || !form.region) return;
-    try {
-      await api.createAndAddShooter(matchId, {
-        ...form,
-        squad: squad ? parseInt(squad) : undefined,
-      });
-      addToast(t('registration.createdAndRegistered'), 'success');
-      onClose();
-      setForm({ first_name: '', last_name: '', category: 'regular', tag: null, division: defaultDivision, power_factor: 'minor', region: '', email: null });
-      setSquad('');
-      onCreated();
-      fetchShooters();
-    } catch (err: any) {
-      addToast(err.message, 'error');
-    }
-  };
+  const {
+    form,
+    setForm,
+    squad,
+    setSquad,
+    divisions,
+    matchOrganization,
+    matchFirearmType,
+    handleCreate,
+  } = useCreateShooterModal({ show, matchId, onClose, onCreated });
 
   return (
     <Modal show={show} onClose={onClose} size="lg">

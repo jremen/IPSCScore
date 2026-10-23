@@ -1,24 +1,9 @@
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import type { Stage } from '../../types/stage';
-
-interface ScoreSheetCountModalProps {
-  show: boolean;
-  stages: Stage[];
-  onClose: () => void;
-  onGenerate: () => void;
-}
+import { useScoreSheetCountModal } from '../../hooks/useScoreSheetCountModal';
+import type { ScoreSheetCountModalProps } from './types';
 
 export default function ScoreSheetCountModal({ show, stages, onClose, onGenerate }: ScoreSheetCountModalProps) {
-  const { t } = useTranslation();
-
-  // Filter out chrono stages (no meaningful score sheet)
-  const printableStages = stages.filter(s => s.scoring_type !== 'chrono');
-
-  const handleGenerate = () => {
-    if (printableStages.length === 0) return;
-    onGenerate();
-  };
+  const { t, printableStages, generate } = useScoreSheetCountModal(stages, onGenerate);
 
   return (
     <Modal show={show} onClose={onClose} size="sm">
@@ -30,7 +15,7 @@ export default function ScoreSheetCountModal({ show, stages, onClose, onGenerate
       </ModalBody>
       <ModalFooter>
         <Button size="sm" color="gray" onClick={onClose}>{t('common.cancel')}</Button>
-        <Button size="sm" onClick={handleGenerate} disabled={printableStages.length === 0}>
+        <Button size="sm" onClick={generate} disabled={printableStages.length === 0}>
           {t('stages.printScoreSheets')}
         </Button>
       </ModalFooter>

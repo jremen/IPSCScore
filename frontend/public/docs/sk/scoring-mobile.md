@@ -24,7 +24,7 @@ V hlavičke sa zobrazí malý offline indikátor s počtom čakajúcich uložen�
 
 ## Súhrnné zobrazenie (vzdialení zadávači)
 
-Po zadaní všetkých polí vidia mobilní zadávači súhrnnú kartu so vstupmi a vypočítaným skóre. Ťuknutím na **Potvrdiť** odošlú. Hostiteľ súťaže potom schváli alebo zamietne.
+Po zadaní všetkých polí vidia mobilní zadávači súhrnnú kartu so vstupmi a vypočítaným skóre. Ťuknutím na **Schváliť** odošlú. Ak hostiteľ už má pre toho istého strelca a situáciu iné skóre, server ponechá skóre hostiteľa a zastarané odoslanie odmietne.
 
 ![Súhrnné zobrazenie v mobile](/docs/screenshots/scoring-mobile-summary.png)
 

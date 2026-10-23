@@ -1,21 +1,9 @@
-import { useState } from 'react';
 import { Card, TextInput, Button, Label, Alert } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '../../stores/authStore';
 import LanguageSelector from '../settings/LanguageSelector';
+import { useAdminLoginPage } from '../../hooks/useAdminLoginPage';
 
 export default function AdminLoginPage() {
-  const adminLogin = useAuthStore((s) => s.adminLogin);
-  const loading = useAuthStore((s) => s.loading);
-  const error = useAuthStore((s) => s.error);
-  const { t } = useTranslation();
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!password) return;
-    await adminLogin(password);
-  };
+  const { t, loading, error, password, setPassword, handleSubmit } = useAdminLoginPage();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
@@ -46,7 +34,7 @@ export default function AdminLoginPage() {
               type="password"
               placeholder={t('auth.enterAdminPassword')}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               required
               autoFocus
             />

@@ -950,6 +950,7 @@
     "sections": {
       "overview": "Overview",
       "matches": "Matches",
+      "cups": "Cups",
       "stages": "Stages & situations",
       "scoringOverview": "Scoring",
       "scoringDesktop": "Scoring on desktop",
@@ -958,9 +959,10 @@
       "squadding": "Squadding & groups",
       "dq": "Disqualification (B-out)",
       "results": "Results",
+      "kiosk": "Kiosk mode",
       "output": "Output & exports",
       "settings": "Settings",
-      "database": "Database backup",
+      "database": "Database & backups",
       "qrCodes": "QR codes & sharing",
       "audit": "Audit log"
     }

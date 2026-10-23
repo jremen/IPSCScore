@@ -14,6 +14,12 @@ Otvorte záložku **Výsledky** pre zobrazenie rebríčka. Existuje päť podzá
 
 **Prejsť v aplikácii:** [Záložka Výsledky](app-tab:results)
 
+## Verejné výsledky a kiosk
+
+Verejná stránka výsledkov na `/results` je iba na čítanie a dostupná bez prihlásenia. Zobrazuje aktuálnu súťaž a je cieľom QR kódu pre výsledky.
+
+Pre televízor alebo projektor otvorte `/results/kiosk`. Kiosk režim automaticky strieda divízie, posúva dlhé tabuľky a zobrazuje živý priebeh súťaže. Viac v [Kiosk režim](kiosk.md).
+
 ## Drill-down strelca
 
 Kliknutím na meno strelca v ľubovoľnej tabuľke výsledkov otvoríte súhrnné zobrazenie strelca: každá situácia s jeho raw skóre, penalizáciami, hit faktorom a percentuálnym podielom v súťaži.

@@ -1,11 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
 import { Badge, Button } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useUIStore } from '../../stores/uiStore';
-import { useMatchStore } from '../../stores/matchStore';
-import { useAuthStore } from '../../stores/authStore';
-import { useStageStore } from '../../stores/stageStore';
-import { useScoringStore } from '../../stores/scoringStore';
 import LanguageSelector from '../settings/LanguageSelector';
 import LanUrlBadge from './LanUrlBadge';
 import OfflineIndicator from './OfflineIndicator';
@@ -15,58 +8,30 @@ import StageDetailsView from '../scoring/StageDetailsView';
 import StagePickerModal from '../scoring/StagePickerModal';
 import HelpModal from '../help/HelpModal';
 import { TbSettings, TbClipboardText, TbHelpCircle } from "react-icons/tb";
-import { useTabMenuAction } from '../../hooks/useTabMenuAction';
-import { Capacitor } from "@capacitor/core";
+import { useHeader } from '../../hooks/useHeader';
 
 export default function Header() {
-  const activeMatchId = useUIStore((s) => s.activeMatchId);
-  const currentMatch = useMatchStore((s) => s.currentMatch);
-  const isAdmin = useAuthStore((s) => s.isAdmin);
-  const authenticatedMatchId = useAuthStore((s) => s.authenticatedMatchId);
-  const logout = useAuthStore((s) => s.logout);
-  const adminLogout = useAuthStore((s) => s.adminLogout);
-  const stages = useStageStore((s) => s.stages);
-  const fetchStages = useStageStore((s) => s.fetchStages);
-  const activeStageId = useScoringStore((s) => s.activeStageId);
-  const { t } = useTranslation();
-  const [showSettings, setShowSettings] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
-  const isMobile = useRef(false);
-
-  // Load stages for the authenticated match so the details modal has the briefing/image.
-  useEffect(() => {
-    if (!isAdmin && authenticatedMatchId && stages.length === 0) {
-      fetchStages(authenticatedMatchId);
-    }
-  }, [isAdmin, authenticatedMatchId, stages.length, fetchStages]);
-
-  const currentStage = !isAdmin && activeStageId
-    ? stages.find((s) => s.id === activeStageId) ?? null
-    : null;
-
-  useTabMenuAction('open-preferences', () => {
-    if (isAdmin) setShowSettings(true);
-  });
-
-  useEffect(() => {
-    if(Capacitor.isNativePlatform()) {
-      isMobile.current = true;
-    }
-  })
-
-  const handleLogout = () => {
-    if (isAdmin) {
-      adminLogout();
-    } else {
-      logout();
-    }
-  };
+  const {
+    t,
+    activeMatchId,
+    currentMatch,
+    isAdmin,
+    currentStage,
+    showSettings,
+    showDetails,
+    showPicker,
+    showHelp,
+    isMobile,
+    setShowSettings,
+    setShowDetails,
+    setShowPicker,
+    setShowHelp,
+    handleLogout,
+  } = useHeader();
 
   return (
     <>
-      <header className={`${isMobile.current ? "pt-8" : ""} relative z-999 bg-gray-900 text-white max-w-screen px-4 py-3 no-print`}>
+      <header className={`${isMobile ? "pt-8" : ""} relative z-999 bg-gray-900 text-white max-w-screen px-4 py-3 no-print`}>
         <div className="flex items-center mb-2">
           <div className="flex items-center gap-3 mr-auto">
             <h1 className="text-lg font-bold tracking-wider">{t('header.title')}</h1>
@@ -82,7 +47,7 @@ export default function Header() {
             )}
           </div>
           <div className="flex items-center gap-3">
-            {isAdmin && <LanUrlBadge /> }
+            {isAdmin && <LanUrlBadge />}
             <LanguageSelector />
 
             {isAdmin && (

@@ -1,10 +1,6 @@
 import { useTranslation } from "react-i18next";
 
-interface NoShootSectionProps {
-  noShootHits: number;
-  onNoShootChange: (newHits: number) => void;
-  disabled?: boolean;
-}
+import type { NoShootSectionProps } from '../types';
 
 export default function NoShootSection({ noShootHits, onNoShootChange, disabled = false }: NoShootSectionProps) {
   const {t} = useTranslation();

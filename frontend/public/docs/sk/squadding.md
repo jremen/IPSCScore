@@ -1,12 +1,17 @@
 # Squady a skupiny
 
-Squad je očíslovaná skupina strelcov, ktorí idú na situáciu spolu. Skupina — strelci, ktorí chcú byť v rovnakom squade budú vždy zgrupovaní dohromady.
+Squad je očíslovaná skupina strelcov, ktorí idú na situáciu spolu. Skupina je „car pool" — strelci, ktorí chcú byť v rovnakom squade.
 
 ## Skupiny
 
-V záložke Registrácia potiahnite riadok strelca na iný riadok, aby ste ich pridali do skupiny. Skupiny sú farebne vyznačené na pravom okraji riadku.
+V záložke Registrácia potiahnite riadok strelca na iný riadok, aby ste ich pridali do skupiny, alebo označte viac riadkov a kliknite na **Zoskupiť vybrané**. Skupiny sú farebne vyznačené na pravom okraji riadku.
 
 Skupiny samy o sebe neprideľujú číslo squadu; iba označia strelcov, ktorí chcú byť spolu. Na pridelenie do squadu použite modal squaddingu.
+
+- Kliknutím na farebný pás v riadku odstránite strelca zo skupiny.
+- Označením zoskupených riadkov a kliknutím na **Zrušiť skupiny vybraných** odstránite viacerých naraz.
+- Dve existujúce skupiny nie je možné spojiť. Najprv jednu zrušte.
+- Ak priradíte ktoréhokoľvek člena skupiny do squadu, všetci členovia skupiny sa presunú do rovnakého squadu.
 
 ## Squady
 

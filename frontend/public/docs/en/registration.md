@@ -23,11 +23,23 @@ Open the **Registration** tab for the current match.
 - **Create + register inline** — create a new shooter and add them in one step.
 - **Edit registration** — override division, category, or power factor for this match only.
 - **Bulk edit / remove** — select rows with checkboxes, then act on them.
-- **Drag-to-group** — drag a row onto another row to put them in the same shooter group (car pool). Useful so friends get squadded together.
+- **Group / pair shooters** — select two or more rows and choose **Group selected**, or drag one row onto another. Useful so friends get squadded together.
 
 ![Edit registration](/docs/screenshots/edit-registration-modal.png)
 
 **To do this in the app:** [Go to Registration](app-tab:registration)
+
+## Grouping registered shooters
+
+A group is a pairing request — a "car pool" of shooters who want to be in the same squad. A group does **not** assign a squad number by itself.
+
+- To create a group, select two or more registered shooters and click **Group selected**, or drag one shooter row onto another.
+- A coloured bar on the right edge of the row shows group membership.
+- To remove a shooter from a group, click the coloured bar on their row. To remove several, select the grouped rows and click **Ungroup selected**.
+- Two existing groups cannot be merged. Ungroup one of them first.
+- When you assign any member of a group in the Squadding modal, the whole group moves to the same squad.
+
+See [Squadding & groups](squadding.md) for assigning groups to squads.
 
 ## Divisions and categories
 

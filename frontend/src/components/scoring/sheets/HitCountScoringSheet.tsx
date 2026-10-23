@@ -1,52 +1,22 @@
 import { Badge } from 'flowbite-react';
-import { useTranslation } from "react-i18next";
-import { useScoringStore } from '../../../stores/scoringStore';
-import { useScoringReadOnly } from '../../../hooks/useScoringReadOnly';
-import { calculateHitCountPreview } from '../../../utils/scoring';
 import { ScoringSheetHeader, DnfToggle, DqSection } from '../shared';
-import type { Stage } from '../../../types/stage';
-import type { ScoreInput } from '../../../types/scoring';
+import { useHitCountScoring } from '../../../hooks/useHitCountScoring';
+import type { ScoringSheetProps } from '../types';
 
-interface Props {
-  stage: Stage;
-  score: ScoreInput;
-}
-
-export default function HitCountScoringSheet({ stage, score }: Props) {
-  const { t } = useTranslation();
-  const setScore = useScoringStore((s) => s.setScore);
-  const shooter = useScoringStore(s => s.registrations.find(r => r.id === s.currentRegistrationId));
-  const isReadOnly = useScoringReadOnly();
-
-  const config = stage.config || {};
-  const pointValue = config.point_value || 10;
-
-  const toggleTargetHit = (targetIdx: number) => {
-    const newTargets = score.targets.map((t, i) => {
-      if (i !== targetIdx) return t;
-      const currentHit = t.target_data?.hit ?? false;
-      return { ...t, target_data: { ...t.target_data, hit: !currentHit } };
-    });
-    setScore({ ...score, targets: newTargets });
-  };
-
-  const handleResetAll = () => {
-    const resetTargets = score.targets.map(t => ({
-      ...t,
-      target_data: { ...t.target_data, hit: false },
-    }));
-    setScore({
-      ...score, targets: resetTargets,
-      time: null, procedural_count: 0, ftsa_count: 0, extra_shot_count: 0,
-      extra_hit_count: 0, stacking_count: 0, overtime_shot_count: 0, is_dnf: false,
-    });
-  };
-
-  const hits = score.targets.filter(t => t.target_data?.hit === true).length;
-  const totalTargets = score.targets.length;
-  const preview = calculateHitCountPreview(hits, pointValue);
-  const typeLabelKey = stage.scoring_type === 'nrl22' ? 'scoring.nrl22Scoring' : 'scoring.longRangeScoring';
-  const typeLabel = t(typeLabelKey);
+export default function HitCountScoringSheet({ stage, score }: ScoringSheetProps) {
+  const {
+    t,
+    shooter,
+    isReadOnly,
+    pointValue,
+    toggleTargetHit,
+    handleResetAll,
+    handleDnfToggle,
+    hits,
+    totalTargets,
+    preview,
+    typeLabel,
+  } = useHitCountScoring(stage, score);
 
   return (
     <div className="p-2 sm:p-4 max-w-xl mx-auto">
@@ -63,7 +33,7 @@ export default function HitCountScoringSheet({ stage, score }: Props) {
             <Badge size="sm" color="blue">{t('scoring.hitsOutOf', { hits, total: totalTargets })}</Badge>
           </div>
           <div className="flex flex-wrap gap-2 justify-center">
-            {score.targets.map((target, idx) => {
+            {score.targets.map((target, index) => {
               const isHit = target.target_data?.hit === true;
               return (
                 <button
@@ -71,11 +41,11 @@ export default function HitCountScoringSheet({ stage, score }: Props) {
                   className={`w-16 h-16 rounded-lg font-bold text-sm flex flex-col items-center justify-center transition-colors cursor-pointer
                     ${isHit ? 'bg-green-100 dark:bg-green-900/60 text-green-700 dark:text-green-300 ring-2 ring-green-400 eink:bg-white! eink:text-black! eink:ring-2! eink:ring-black!' : 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400 ring-1 ring-red-300'}
                     ${isReadOnly ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  onClick={() => toggleTargetHit(idx)}
+                  onClick={() => toggleTargetHit(index)}
                   disabled={isReadOnly}
                 >
                   <span className="text-lg">{isHit ? '✓' : '✗'}</span>
-                  <span className="text-2.5">T{idx + 1}</span>
+                  <span className="text-2.5">T{index + 1}</span>
                 </button>
               );
             })}
@@ -84,7 +54,7 @@ export default function HitCountScoringSheet({ stage, score }: Props) {
       </div>
 
       <div className="flex items-center gap-4 mb-3 flex-wrap">
-        <DnfToggle isDnf={score.is_dnf} onToggle={() => setScore({ ...score, is_dnf: !score.is_dnf })} disabled={isReadOnly} />
+        <DnfToggle isDnf={score.is_dnf} onToggle={handleDnfToggle} disabled={isReadOnly} />
         <DqSection shooter={shooter} disabled={isReadOnly} />
       </div>
 

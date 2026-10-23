@@ -168,6 +168,13 @@ A distributable, notarized build needs a **Developer ID Application** certificat
   signing certificate (and, for the arm64 build, one that supports it).
 - **Linux ships as an AppImage only** — no `.deb`/`.rpm`. Add extra targets under
   `linux.target` in `electron-builder.yml` if you want them.
+- **Linux AppImages no longer need `zlib1g-dev`.** `electron-builder.yml` pins
+  `toolsets.appimage: "1.0.3"`, which embeds the statically linked AppImage
+  runtime. The legacy runtime (electron-builder's default) linked `libz.so` on
+  ARM64, which only exists when `zlib1g-dev` is installed — unaffected systems
+  failed with `error while loading shared libraries: libz.so`. The toolset is
+  downloaded once into electron-builder's cache (per runner) on the first Linux
+  build. Normal AppImage mounting still requires FUSE2 on the target system.
 - **Android is an APK, not an AAB** — it installs by sideloading, it is not a Play
   Store upload. `versionCode` is derived from the version
   (`major * 10000 + minor * 100 + patch`) so it stays monotonic; a Play Store

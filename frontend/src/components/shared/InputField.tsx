@@ -1,32 +1,8 @@
 import { Label } from 'flowbite-react';
-import { forwardRef, memo, useCallback } from 'react';
+import { forwardRef, memo } from 'react';
 import { TbChevronDown, TbChevronUp } from 'react-icons/tb';
-
-interface InputFieldProps {
-  id?: string;
-  label?: string;
-  value: string | number;
-  onChange: (value: string) => void;
-  onBlur?: () => void;
-  onFocus?: (e: React.FocusEvent<HTMLInputElement>) => void;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
-  type?: 'text' | 'number';
-  step?: string;
-  min?: string;
-  max?: string;
-  unit?: string;
-  required?: boolean;
-  placeholder?: string;
-  sizing?: 'xs' | 'sm' | 'md' | 'lg';
-  color?: 'failure' | 'warning' | 'success';
-  disabled?: boolean;
-  /** Extra CSS classes applied to the <input> element */
-  className?: string;
-  /** Use text input with decimal keyboard. Fixes locale-dependent decimal separator issues in type="number". */
-  decimal?: boolean;
-  /** Use text input with numeric keyboard. Enables selectOnFocus-friendly number inputs. */
-  numeric?: boolean;
-}
+import { useInputField } from '../../hooks/useInputField';
+import type { InputFieldProps } from './types';
 
 export const InputField = memo(
   forwardRef<HTMLInputElement, InputFieldProps>(
@@ -55,49 +31,8 @@ export const InputField = memo(
       },
       ref,
     ) => {
-      const stepNum = parseFloat(step) || 0.01;
-
-      const increment = useCallback(() => {
-        const n = parseFloat(String(value)) || 0;
-        const next = parseFloat((n + stepNum).toFixed(10));
-        const maxNum = max !== undefined ? parseFloat(max) : Infinity;
-        onChange(String(Math.min(next, maxNum)));
-      }, [value, stepNum, max, onChange]);
-
-      const decrement = useCallback(() => {
-        const n = parseFloat(String(value)) || 0;
-        const next = parseFloat((n - stepNum).toFixed(10));
-        const minNum = min !== undefined ? parseFloat(min) : -Infinity;
-        onChange(String(Math.max(next, minNum)));
-      }, [value, stepNum, min, onChange]);
-
-      const sizeClass =
-        sizing === 'lg'
-          ? 'p-4 pr-7'
-          : sizing === 'md'
-            ? 'p-2.5 pr-7'
-            : sizing === 'sm'
-              ? 'p-2 pr-7'
-              : /* xs */ 'py-0.5 px-1.5 pr-6 text-xs';
-
-      let colorClass: string;
-      if (color === 'failure') {
-        colorClass =
-          'border-red-500 bg-red-50 text-red-900 placeholder-red-400 focus:border-red-500 focus:ring-red-500 dark:bg-red-100 dark:border-red-400 dark:text-red-900';
-      } else if (color === 'warning') {
-        colorClass =
-          'border-yellow-400 bg-yellow-50 text-yellow-900 placeholder-yellow-400 focus:border-yellow-400 focus:ring-yellow-400';
-      } else {
-        colorClass =
-          'border-gray-300 bg-gray-50 text-gray-900 placeholder-gray-400 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400 dark:focus:border-blue-500 dark:focus:ring-blue-500';
-      }
-
-      const spinnerBorderClass =
-        color === 'failure'
-          ? 'border-red-400 dark:border-red-400'
-          : color === 'warning'
-            ? 'border-yellow-400'
-            : 'border-gray-300 dark:border-gray-600';
+      const { increment, decrement, sizeClass, colorClass, spinnerBorderClass, handleChange } =
+        useInputField({ value, onChange, step, min, max, sizing, color, decimal, numeric });
 
       return (
         <div>
@@ -125,23 +60,7 @@ export const InputField = memo(
               min={type === 'number' && !decimal && !numeric ? min : undefined}
               max={type === 'number' && !decimal && !numeric ? max : undefined}
               value={Number(value).toString()}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (
-                  decimal &&
-                  v !== '' &&
-                  v !== '-' &&
-                  !/^-?\d*([.,]\d*)?$/.test(v)
-                )
-                  return;
-                if (
-                  numeric &&
-                  v !== '' &&
-                  !/^\d*$/.test(v)
-                )
-                  return;
-                onChange(decimal ? v.replace(/,/g, '.') : v);
-              }}
+              onChange={(event) => handleChange(event.target.value)}
               onBlur={onBlur}
               onFocus={onFocus}
               onKeyDown={onKeyDown}

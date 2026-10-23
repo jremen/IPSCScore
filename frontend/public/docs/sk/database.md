@@ -2,27 +2,36 @@
 
 ![Modal nastavení s panelom Databáza](/docs/screenshots/settings-modal.png)
 
-Panel Databáza v Nastaveniach umožňuje exportovať, importovať a automaticky zálohovať vaše dáta.
+Panel **Databáza** v Nastaveniach exportuje a obnovuje všetky dáta aplikácie. Formát zálohy závisí od prostredia, v ktorom aplikácia beží:
 
-## Manuálny export / import (.sql)
+- **Prehliadač a Electron desktop aplikácia** — kompletný `.sql` výpis databázy.
+- **Aplikácia pre Android a iOS** — prenosný `.json` snapshot lokálnej databázy v zariadení.
 
-- **Export** — stiahne kompletný `.sql` súbor vašej databázy. Použite ho ako snímku na prenos medzi zariadeniami alebo ako záložnú kópiu.
-- **Import** — nahradí **všetky** existujúce dáta obsahom `.sql` súboru. Potvrdzovací dialóg varuje, že túto akciu nie je možné vrátiť.
+Oba formáty obsahujú celý lokálny súbor dát.
 
-Obe akcie sú dostupné z **Nastavenia → Databáza**.
+## Manuálny export / import
 
-## Import WinMSS
+- **Export** — stiahne kompletný súbor zálohy. Použite ho ako snímku na prenos medzi zariadeniami alebo ako záložnú kópiu.
+- **Import** — nahradí **všetky** existujúce dáta obsahom zálohy. Potvrdzovací dialóg varuje, že túto akciu nie je možné vrátiť. Po obnove sa aplikácia znova načíta.
 
-Ak máte existujúci `.mdb` súbor z WinMSS, použite tlačidlo **Import WinMSS** v Nastavenia → Databáza na import starších súťažných dát (súťaže, strelci, registrácie, skóre).
+Obe akcie sú dostupné v **Nastavenia → Databáza**. V samostatnej mobilnej aplikácii obnova zároveň zruší aktuálnu administrátorskú reláciu, pretože databáza pod ňou bola nahradená.
 
-## Lokálna automatická záloha (iba Electron desktop aplikácia)
+## Automatická záloha (iba Electron desktop aplikácia)
 
-Pre priebežnú ochranu nastavte **priečinok záloh** v **Nastavenia → Databáza → Automatická záloha**.
+Pre priebežnú ochranu nastavte **priečinok záloh** v **Nastavenia → Databáza → Automatická záloha**. Automatická záloha nie je dostupná v prehliadači ani v samostatnej aplikácii pre Android/iOS — tam používajte manuálny export.
 
-1. **Vyberte priečinok** — zvoľte ľubovoľný lokálny priečinok synchronizovaný s iCloud, Google Drive, OneDrive, Dropbox, USB diskom alebo NAS.
-2. **Povoľte automatické zálohovanie** — aplikácia zapíše plnú zálohu každú noc a priebežné delta zmeny počas dňa.
-3. **Sledujte stav** — panel zobrazuje čas poslednej plnej zálohy, počet čakajúcich delta zmien a celkovú veľkosť na disku.
-4. **Zálohovať teraz** — okamžite spustí plnú zálohu.
-5. **Obnoviť z priečinka** — vyberte priečinok záloh a obnovte celú dátovú stopu (full + delta). Toto nahradí všetky dáta a znova načíta aplikáciu.
+1. **Vyberte priečinok** — zvoľte ľubovoľný lokálny priečinok, vrátane priečinka synchronizovaného s iCloud, Google Drive, OneDrive, Dropbox, USB diskom alebo NAS.
+2. **Automatická záloha sa spustí po výbere priečinka** — prepínačom ju môžete pozastaviť alebo obnoviť.
+3. **Plné zálohy** — kým je zálohovanie zapnuté, aplikácia zapisuje plnú zálohu každých 30 minút a uchováva posledné tri plné zálohy.
+4. **Delta zmeny** — po uložení skóre aplikácia zapíše malú delta zmenu. Delta zmeny sa vymažú po úspešnej ďalšej plnej zálohe.
+5. **Sledujte stav** — panel zobrazuje čas poslednej plnej zálohy, počet čakajúcich delta zmien a celkovú veľkosť na disku.
+6. **Zálohovať teraz** — okamžite spustí plnú zálohu.
+7. **Obnoviť z priečinka** — vyberte priečinok záloh, skontrolujte plnú zálohu a reťaz delta zmien a potvrďte. Toto nahradí všetky dáta a znova načíta aplikáciu.
 
-Priečinok záloh musí byť dostupný, aby automatický režim fungoval. Ak je disk odpojený, aplikácia pozastaví zálohovanie a panel zobrazí upozornenie.
+Priečinok záloh musí byť dostupný, aby automatický režim fungoval. Ak je disk odpojený, aplikácia zálohovanie pozastaví a panel zobrazí upozornenie.
+
+## Import WinMSS a Practiscore
+
+Súbory WinMSS (`.mdb` / `.accdb`) a Practiscore (`.psc`) sa importujú cez **Súťaže → Importovať súťaž**, nie cez Nastavenia → Databáza. Tieto parsery bežia v serverovej časti prehliadača/desktopu a v samostatnej aplikácii pre Android/iOS sú skryté.
+
+Postup importu nájdete v [Súťaže](matches.md).

@@ -1,44 +1,17 @@
-import { useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Alert } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../services/api';
-import { TbTrash } from "react-icons/tb";
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface BulkDeleteShootersModalProps {
-  show: boolean;
-  onClose: () => void;
-  shooterIds: string[];
-  shooterNames: string[];
-  onDeleted: () => void;
-}
+import { TbTrash } from 'react-icons/tb';
+import { useBulkDeleteShootersModal } from '../../hooks/useBulkDeleteShootersModal';
+import type { BulkDeleteShootersModalProps } from './types';
 
 export default function BulkDeleteShootersModal({ show, onClose, shooterIds, shooterNames, onDeleted }: BulkDeleteShootersModalProps) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ deleted: number; failed: Array<{ id: string; name: string; reason: string }> } | null>(null);
-
-  const handleDelete = async () => {
-    setLoading(true);
-    try {
-      const res = await api.bulkDeleteShooters(shooterIds);
-      setResult(res);
-      if (res.failed.length === 0) {
-        onDeleted();
-        setTimeout(onClose, 1500);
-      }
-    } catch (err: any) {
-      setResult({ deleted: 0, failed: [{ id: '', name: '', reason: err.message || t('common.unknownError') }] });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClose = () => {
-    setResult(null);
-    onClose();
-  };
-  useEscClose(handleClose);
+  const { loading, result, handleDelete, handleClose } = useBulkDeleteShootersModal({
+    shooterIds,
+    shooterNames,
+    onClose,
+    onDeleted,
+  });
 
   return (
     <Modal show={show} onClose={handleClose} size="md">
@@ -55,8 +28,8 @@ export default function BulkDeleteShootersModal({ show, onClose, shooterIds, sho
               <Alert color="warning">
                 <p className="font-medium mb-1">{t('bulkDelete.partialSuccess', { deleted: result.deleted, failed: result.failed.length })}</p>
                 <ul className="text-sm list-disc pl-4">
-                  {result.failed.map((f, i) => (
-                    <li key={i}>{f.name || f.id}: {f.reason}</li>
+                  {result.failed.map((failure, index) => (
+                    <li key={index}>{failure.name || failure.id}: {failure.reason}</li>
                   ))}
                 </ul>
               </Alert>
@@ -64,12 +37,10 @@ export default function BulkDeleteShootersModal({ show, onClose, shooterIds, sho
           </div>
         ) : (
           <div className="space-y-3 dark:text-white">
-            <p>
-              {t('bulkDelete.confirm', { count: shooterIds.length })}
-            </p>
+            <p>{t('bulkDelete.confirm', { count: shooterIds.length })}</p>
             <div className="max-h-40 overflow-y-auto text-sm text-gray-600 dark:text-gray-400 border rounded p-2">
-              {shooterNames.slice(0, 10).map((name, i) => (
-                <div key={i}>{name}</div>
+              {shooterNames.slice(0, 10).map((name, index) => (
+                <div key={index}>{name}</div>
               ))}
               {shooterNames.length > 10 && (
                 <div className="italic">...{t('bulkDelete.andMore', { count: shooterNames.length - 10 })}</div>

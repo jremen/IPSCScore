@@ -1,16 +1,6 @@
 import { useDropzone } from 'react-dropzone';
 import { Button, Spinner } from 'flowbite-react';
-
-interface FileDropzoneProps {
-  accept: Record<string, string[]>;
-  onFileSelected: (file: File) => void;
-  disabled?: boolean;
-  icon?: string;
-  dropHint: string;
-  dragHint: string;
-  browseHint: string;
-  extraButton?: { label: string; onClick: () => void };
-}
+import type { FileDropzoneProps } from './types';
 
 export default function FileDropzone({
   accept,

@@ -1,17 +1,10 @@
-import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { calculateHitCountPreview } from '../../../utils/scoring';
 import { SummarySheetLayout } from '../shared/SummarySheetLayout';
+import { useHitCountSummary } from '../../../hooks/useHitCountSummary';
 import type { ScoreSummarySheetProps } from '../ScoreSummarySheet';
 
-export default function HitCountSummary({ stage, score, shooterName, onBack, onApprove }: ScoreSummarySheetProps) {
-  const { t } = useTranslation();
-
-  const config = stage.config || {};
-  const pointValue = config.point_value ?? 10;
-  const hits = score.targets.filter(t => t.target_data?.hit === true).length;
-  const totalTargets = score.targets.length;
-  const preview = useMemo(() => calculateHitCountPreview(hits, pointValue), [hits, pointValue]);
+export default function HitCountSummary(props: ScoreSummarySheetProps) {
+  const { shooterName, onBack, onApprove } = props;
+  const { t, hits, totalTargets, preview } = useHitCountSummary(props);
 
   return (
     <SummarySheetLayout shooterName={shooterName} onBack={onBack} onApprove={onApprove}>

@@ -2,31 +2,8 @@ import { Badge } from 'flowbite-react';
 import { InputField } from '../../shared/InputField';
 import { useTranslation } from "react-i18next";
 
-type TotalField = 'alpha' | 'charlie' | 'delta' | 'miss' | 'no_shoot_hits';
-
-interface PaperTotals {
-  alpha: number;
-  charlie: number;
-  delta: number;
-  miss: number;
-  no_shoot_hits: number;
-}
-
-interface DesktopPaperTargetsProps {
-  paperTargets: { target_index: number; alpha: number; charlie: number; delta: number; miss: number; no_shoot_hits: number }[];
-  hpp: number;
-  hasNoShootTargets: boolean;
-  paperTotals: PaperTotals;
-  onPaperTotalsChange: (field: TotalField, value: number) => void;
-  disabled?: boolean;
-}
-
-const ZONE_CONFIG: { field: TotalField; label: string; color: string;}[] = [
-  { field: 'alpha', label: 'A', color: 'border-green-500 focus:ring-green-400'},
-  { field: 'charlie', label: 'C', color: 'border-yellow-500 focus:ring-yellow-400'},
-  { field: 'delta', label: 'D', color: 'border-orange-500 focus:ring-orange-400'},
-  { field: 'miss', label: 'M', color: 'border-red-500 focus:ring-red-400'},
-];
+import type { DesktopPaperTargetsProps } from '../types';
+import { getPaperZoneFields } from './desktopPaperTargetsConfig';
 
 export default function DesktopPaperTargets({
   paperTargets,
@@ -42,9 +19,7 @@ export default function DesktopPaperTargets({
   const totalScoring = paperTotals.alpha + paperTotals.charlie + paperTotals.delta;
   const totalAll = totalScoring + paperTotals.miss;
 
-  const fields: { field: TotalField; label: string; color: string; }[] = hasNoShootTargets
-    ? [...ZONE_CONFIG, { field: 'no_shoot_hits', label: 'PT', color: 'border-red-500 focus:ring-red-400' }]
-    : ZONE_CONFIG;
+  const fields = getPaperZoneFields(hasNoShootTargets);
 
   return (
     <div className="p-3">

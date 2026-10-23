@@ -1,8 +1,9 @@
 import { Button, Spinner } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { useScoringStore } from '../../../stores/scoringStore';
+import type { SummaryNavigationButtonProps } from '../types';
 
-export function SummaryApproveButton({ onClick }: { onClick: () => void }) {
+export function SummaryApproveButton({ onClick }: SummaryNavigationButtonProps) {
   const { t } = useTranslation();
   const saving = useScoringStore((s) => s.saving);
   return (

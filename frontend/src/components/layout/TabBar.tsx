@@ -1,27 +1,17 @@
-import { useUIStore, type TabId } from '../../stores/uiStore';
+import { useUIStore } from '../../stores/uiStore';
 import { useTranslation } from 'react-i18next';
 import MatchProgress from "./MatchProgress";
-
-const TABS: { id: TabId; labelKey: string; icon: string }[] = [
-  { id: 'matches', labelKey: 'tabs.matches', icon: '🏅' },
-  { id: 'stages', labelKey: 'tabs.stages', icon: '🎯' },
-  { id: 'shooters', labelKey: 'tabs.shooters', icon: '👤' },
-  { id: 'registration', labelKey: 'tabs.registration', icon: '📋' },
-  { id: 'scoring', labelKey: 'tabs.scoring', icon: '📊' },
-  { id: 'results', labelKey: 'tabs.results', icon: '🥇' },
-  { id: 'cups', labelKey: 'tabs.cups', icon: '🏆' },
-];
+import { APP_TABS } from './tabs';
 
 export default function TabBar() {
   const activeTab = useUIStore((s) => s.activeTab);
   const setActiveTab = useUIStore((s) => s.setActiveTab);
   const { t } = useTranslation();
-  // useEffect (() => { runningMatch && fetchMatch(runningMatch); }, [fetchMatch, runningMatch]);
 
   return (
     <div className="no-print border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900">
       <div className="flex overflow-x-auto items-center scrollbar-hide">
-        {TABS.map((tab) => (
+        {APP_TABS.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}

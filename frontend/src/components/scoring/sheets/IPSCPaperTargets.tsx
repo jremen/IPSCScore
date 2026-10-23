@@ -1,37 +1,7 @@
 import { Badge } from 'flowbite-react';
 import HitCell from '../shared/HitCell';
-import type { TargetScore } from '../../../types/scoring';
 import { useTranslation } from "react-i18next";
-
-interface PaperTargetsTableProps {
-  paperTargets: TargetScore[];
-  hpp: number;
-  hasNoShootTargets: boolean;
-  isTargetFinished: (target: TargetScore) => boolean;
-  onHitClick: (targetIndex: number, field: 'alpha' | 'charlie' | 'delta') => void;
-  onMissClick: (targetIndex: number) => void;
-  onDecrement: (targetIndex: number, field: 'alpha' | 'charlie' | 'delta' | 'miss') => void;
-  onNSClick: (targetIndex: number, delta: number) => void;
-  onResetTarget: (targetIndex: number) => void;
-  disabled?: boolean;
-  // Steel row props
-  steelCount: number;
-  steelHits: number;
-  steelMisses: number;
-  onSteelHitIncrement: () => void;
-  onSteelHitDecrement: () => void;
-  onSteelMissIncrement: () => void;
-  onSteelMissDecrement: () => void;
-  onSteelNSClick: (delta: number) => void;
-  steelNSHits: number;
-  onResetSteel: () => void;
-  // NPM props
-  npmCount: number;
-  npmHits: number;
-  onNpmHitIncrement: () => void;
-  onNpmHitDecrement: () => void;
-  onResetNpm: () => void;
-}
+import type { PaperTargetsTableProps } from '../types';
 
 export default function PaperTargetsTable({
   paperTargets,

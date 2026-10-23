@@ -1,14 +1,10 @@
-import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { calculateRingPreview } from '../../../utils/scoring';
 import { SummarySheetLayout } from '../shared/SummarySheetLayout';
+import { useRingSummary } from '../../../hooks/useRingSummary';
 import type { ScoreSummarySheetProps } from '../ScoreSummarySheet';
 
-export default function RingSummary({ score, shooterName, onBack, onApprove }: ScoreSummarySheetProps) {
-  const { t } = useTranslation();
-
-  const ringValues: number[] = score.score_data?.ring_values || [];
-  const preview = useMemo(() => calculateRingPreview(ringValues), [ringValues]);
+export default function RingSummary(props: ScoreSummarySheetProps) {
+  const { shooterName, onBack, onApprove } = props;
+  const { t, preview } = useRingSummary(props);
 
   return (
     <SummarySheetLayout shooterName={shooterName} onBack={onBack} onApprove={onApprove}>

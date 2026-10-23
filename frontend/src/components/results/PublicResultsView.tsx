@@ -1,89 +1,12 @@
-import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../services/api';
-import { useUIStore } from '../../stores/uiStore';
-import { useMatchStore } from '../../stores/matchStore';
-import { useResultsStore } from '../../stores/resultsStore';
-import { useSSEStore } from '../../stores/sseStore';
 import ResultsOverview from './ResultsOverview';
 import LanguageSelector from '../settings/LanguageSelector';
-import { ThemeSelector } from "../settings/ThemeSelector";
-
-const AUTO_REFRESH_INTERVAL = 30000; // 30 seconds
-const SSE_FALLBACK_INTERVAL = 300000; // 5 minutes
+import { ThemeSelector } from '../settings/ThemeSelector';
+import { usePublicResultsView } from '../../hooks/usePublicResultsView';
 
 export default function PublicResultsView() {
   const { t } = useTranslation();
-  const activeMatchId = useUIStore((s) => s.activeMatchId);
-  const setActiveMatch = useUIStore((s) => s.setActiveMatch);
-  const setActiveTab = useUIStore((s) => s.setActiveTab);
-  const sseConnected = useSSEStore((s) => s.connected);
-  const fetchMatches = useMatchStore((s) => s.fetchMatches);
-  const fetchOverall = useResultsStore((s) => s.fetchOverall);
-  const fetchByDivision = useResultsStore((s) => s.fetchByDivision);
-  const fetchByStage = useResultsStore((s) => s.fetchByStage);
-  const fetchByCategory = useResultsStore((s) => s.fetchByCategory);
-  const fetchByTag = useResultsStore((s) => s.fetchByTag);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
-  const [matchName, setMatchName] = useState<string>('');
-  const [publicMatch, setPublicMatch] = useState<any>(null);
-
-  // Load current match on mount
-  useEffect(() => {
-    setActiveTab('results');
-    (async () => {
-      try {
-        const currentMatch = await api.getCurrentMatch();
-        if (currentMatch?.id) {
-          setActiveMatch(currentMatch.id);
-          setMatchName(currentMatch.name || '');
-          // The public page does not load the full match list. Keep the
-          // current match locally so the results view can tell whether this
-          // sport uses divisions (archery/ISSF do not).
-          setPublicMatch(currentMatch);
-        } else {
-          setError('noCurrentMatch');
-        }
-      } catch {
-        // If no current match, try loading all matches and showing a message
-        await fetchMatches();
-        setError('noCurrentMatch');
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [setActiveMatch, setActiveTab, fetchMatches]);
-
-  // Fetch results when match is set
-  useEffect(() => {
-    if (activeMatchId) {
-      fetchOverall(activeMatchId);
-      fetchByDivision(activeMatchId);
-      fetchByStage(activeMatchId);
-      fetchByCategory(activeMatchId);
-      fetchByTag(activeMatchId);
-    }
-  }, [activeMatchId, fetchOverall, fetchByDivision, fetchByStage, fetchByCategory, fetchByTag]);
-
-  // Auto-refresh results
-  const refreshResults = useCallback(() => {
-    const currentMatchId = useUIStore.getState().activeMatchId;
-    if (currentMatchId) {
-      fetchOverall(currentMatchId);
-      fetchByDivision(currentMatchId);
-      fetchByStage(currentMatchId);
-      fetchByCategory(currentMatchId);
-      fetchByTag(currentMatchId);
-      setLastRefresh(new Date());
-    }
-  }, [fetchOverall, fetchByDivision, fetchByStage, fetchByCategory, fetchByTag]);
-
-  useEffect(() => {
-    const interval = setInterval(refreshResults, sseConnected ? SSE_FALLBACK_INTERVAL : AUTO_REFRESH_INTERVAL);
-    return () => clearInterval(interval);
-  }, [refreshResults, sseConnected]);
+  const { loading, error, lastRefresh, matchName, publicMatch } = usePublicResultsView();
 
   if (loading) {
     return (
@@ -100,18 +23,10 @@ export default function PublicResultsView() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center max-w-md px-4">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
-            🏆 {t('results.publicTitle')}
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
-            {t('results.noCurrentMatch')}
-          </p>
-          <div className="text-sm text-gray-400 dark:text-gray-500">
-            IP:3001/results
-          </div>
-          <div className="mt-4">
-            <LanguageSelector />
-          </div>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">🏆 {t('results.publicTitle')}</h1>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">{t('results.noCurrentMatch')}</p>
+          <div className="text-sm text-gray-400 dark:text-gray-500">IP:3001/results</div>
+          <div className="mt-4"><LanguageSelector /></div>
         </div>
       </div>
     );
@@ -119,7 +34,6 @@ export default function PublicResultsView() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-200 dark:bg-gray-900">
-      {/* Minimal header for public results */}
       <header className="bg-gray-900 text-white sticky top-0 z-110 px-4 py-2 print:hidden">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -131,11 +45,10 @@ export default function PublicResultsView() {
           </div>
         </div>
         <div className="text-xs text-blue-200 dark:text-white">
-            {t('results.autoRefresh', { time: lastRefresh.toLocaleTimeString() })}
+          {t('results.autoRefresh', { time: lastRefresh.toLocaleTimeString() })}
         </div>
       </header>
 
-      {/* Results content */}
       <main className="flex-1">
         <ResultsOverview isPublic matchOverride={publicMatch} />
       </main>

@@ -1,63 +1,18 @@
-import { useState, useEffect } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Select, Label } from 'flowbite-react';
 import { InputField } from '../shared/InputField';
 import { useTranslation } from 'react-i18next';
-import { useUIStore } from '../../stores/uiStore';
-import { useMatchStore } from '../../stores/matchStore';
-import { api } from '../../services/api';
-import { CATEGORIES, POWER_FACTORS, getDivisionsForMatch } from '../../utils/constants';
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface EditRegistrationModalProps {
-  show: boolean;
-  onClose: () => void;
-  registration: any | null;
-  matchId: string;
-  onSaved: () => void;
-}
+import { CATEGORIES, POWER_FACTORS } from '../../utils/constants';
+import { useEditRegistrationModal } from '../../hooks/useEditRegistrationModal';
+import type { EditRegistrationModalProps } from './types';
 
 export default function EditRegistrationModal({ show, onClose, registration, matchId, onSaved }: EditRegistrationModalProps) {
-  const addToast = useUIStore((s) => s.addToast);
-  const matches = useMatchStore((s) => s.matches);
   const { t } = useTranslation();
-  useEscClose(onClose);
-  const match = matches.find((m: any) => m.id === matchId);
-  const divisions = getDivisionsForMatch(match);
-  const divisionApplies = divisions.length > 0;
-  const [form, setForm] = useState({ squad: '', division: '', category: '', power_factor: '', tag: '' });
-
-  // Sync form when registration changes or modal opens. A stored override is
-  // only shown when it is valid for this match; an inherited division that
-  // does not belong to the match falls back to "Default" (resolved at read
-  // time), so saving cannot preserve the invalid value.
-  useEffect(() => {
-    if (registration) {
-      const storedOverride = registration.reg_division as string | null | undefined;
-      const overrideIsValid = !!storedOverride
-        && divisions.some((division) => division.value === storedOverride);
-      setForm({
-        squad: registration.squad === null || registration.squad === undefined ? '' : String(registration.squad),
-        division: divisionApplies && overrideIsValid ? storedOverride! : '',
-        category: registration.reg_category || '',
-        power_factor: registration.reg_power_factor || '',
-        tag: registration.tag || '',
-      });
-    }
-  }, [registration, divisionApplies, match?.organization, match?.firearm_type]);
-
-  const handleSave = async () => {
-    if (!matchId || !registration) return;
-    await api.updateRegistration(matchId, registration.id, {
-      squad: form.squad ? parseInt(form.squad) : null,
-      division: form.division || null,
-      category: form.category || null,
-      power_factor: form.power_factor || null,
-      tag: form.tag || null,
-    });
-    addToast(t('registration.updated'), 'success');
-    onClose();
-    onSaved();
-  };
+  const { form, setForm, divisions, handleSave } = useEditRegistrationModal({
+    matchId,
+    registration,
+    onClose,
+    onSaved,
+  });
 
   return (
     <Modal show={show} onClose={onClose} size="xl">
@@ -66,14 +21,14 @@ export default function EditRegistrationModal({ show, onClose, registration, mat
         <div className="flex flex-col gap-3">
           <div>
             <Label>{t('registration.squad')}</Label>
-            <InputField type="number" step="1" min="0" value={form.squad} onChange={(v) => setForm({ ...form, squad: v })} placeholder={t('registration.leaveBlankDefault')} />
+            <InputField type="number" step="1" min="0" value={form.squad} onChange={(value) => setForm({ ...form, squad: value })} placeholder={t('registration.leaveBlankDefault')} />
           </div>
           {divisions.length > 0 && (
             <div>
               <Label>{t('registration.divisionOverride')}</Label>
               <Select value={form.division} onChange={(e) => setForm({ ...form, division: e.target.value })}>
                 <option value="">{t('registration.defaultOption')}</option>
-                {divisions.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+                {divisions.map((division) => <option key={division.value} value={division.value}>{division.label}</option>)}
               </Select>
             </div>
           )}
@@ -81,19 +36,19 @@ export default function EditRegistrationModal({ show, onClose, registration, mat
             <Label>{t('registration.categoryOverride')}</Label>
             <Select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
               <option value="">{t('registration.defaultOption')}</option>
-              {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{t(c.i18nKey)}</option>)}
+              {CATEGORIES.map((category) => <option key={category.value} value={category.value}>{t(category.i18nKey)}</option>)}
             </Select>
           </div>
           <div>
             <Label>{t('registration.powerFactorOverride')}</Label>
             <Select value={form.power_factor} onChange={(e) => setForm({ ...form, power_factor: e.target.value })}>
               <option value="">{t('registration.defaultOption')}</option>
-              {POWER_FACTORS.map((p) => <option key={p.value} value={p.value}>{t(p.i18nKey)}</option>)}
+              {POWER_FACTORS.map((powerFactor) => <option key={powerFactor.value} value={powerFactor.value}>{t(powerFactor.i18nKey)}</option>)}
             </Select>
           </div>
           <div>
             <Label>{t('registration.tag')}</Label>
-            <InputField value={form.tag} onChange={(v) => setForm({ ...form, tag: v })} placeholder={t('registration.tagPlaceholder')} />
+            <InputField value={form.tag} onChange={(value) => setForm({ ...form, tag: value })} placeholder={t('registration.tagPlaceholder')} />
           </div>
         </div>
       </ModalBody>

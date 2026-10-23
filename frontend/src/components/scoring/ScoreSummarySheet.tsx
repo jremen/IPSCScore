@@ -1,5 +1,4 @@
-import type { Stage } from '../../types/stage';
-import type { ScoreInput } from '../../types/scoring';
+import type { ScoreSummarySheetProps } from './types';
 import IPSCSummary from './summary/IPSCSummary';
 import IDPASummary from './summary/IDPASummary';
 import ActionSteelSummary from './summary/ActionSteelSummary';
@@ -7,14 +6,7 @@ import MultiGunSummary from './summary/MultiGunSummary';
 import RingSummary from './summary/RingSummary';
 import HitCountSummary from './summary/HitCountSummary';
 
-export interface ScoreSummarySheetProps {
-  stage: Stage;
-  score: ScoreInput;
-  shooterName: string;
-  shooterDetails?: { division: string; category: string; powerFactor: string };
-  onBack: () => void;
-  onApprove: () => void;
-}
+export type { ScoreSummarySheetProps } from './types';
 
 export default function ScoreSummarySheet(props: ScoreSummarySheetProps) {
   const { stage } = props;

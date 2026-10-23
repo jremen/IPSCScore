@@ -1,14 +1,7 @@
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { useEscClose } from '../../../hooks/useEscClose';
-
-interface RescoreConfirmModalProps {
-  show: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  shooterName: string;
-  stageName: string;
-}
+import type { RescoreConfirmModalProps } from '../types';
 
 export default function RescoreConfirmModal({
   show,

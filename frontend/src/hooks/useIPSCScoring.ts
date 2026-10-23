@@ -1,4 +1,5 @@
 import { useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useScoringStore } from '../stores/scoringStore';
 import { calculatePreview } from '../utils/scoring';
 import type { Stage } from '../types/stage';
@@ -10,6 +11,7 @@ import type { ScoreInput, TargetScore } from '../types/scoring';
  * and live score preview calculation.
  */
 export function useIPSCScoring(stage: Stage, score: ScoreInput) {
+  const { t } = useTranslation();
   const setScore = useScoringStore((s) => s.setScore);
 
   const pf = (() => {
@@ -345,6 +347,20 @@ export function useIPSCScoring(stage: Stage, score: ScoreInput) {
     setScore({ ...currentScore, targets: newTargets });
   }, [setScore]);
 
+  const handleNpmHitChange = useCallback((newHits: number) => {
+    const currentScore = useScoringStore.getState().currentScore;
+    if (!currentScore) return;
+    const sortedNpm = currentScore.targets
+      .filter((target) => target.target_type === 'npm')
+      .sort((a, b) => a.target_index - b.target_index);
+    const hitSet = new Set(sortedNpm.slice(0, newHits).map((target) => target.target_index));
+    const newTargets = currentScore.targets.map((target) => {
+      if (target.target_type !== 'npm') return target;
+      return { ...target, steel_hit: hitSet.has(target.target_index) ? true : null };
+    });
+    setScore({ ...currentScore, targets: newTargets });
+  }, [setScore]);
+
   const handleNoShootChange = useCallback((newHits: number) => {
     const currentScore = useScoringStore.getState().currentScore;
     if (!currentScore) return;
@@ -433,6 +449,16 @@ export function useIPSCScoring(stage: Stage, score: ScoreInput) {
   const showExtraPenalties = isVirginia || isFixedTime;
 
   const hasSidebar = steelTargets.length > 0 || npmTargets.length > 0 || (noShootTargets.length > 0 && stage.paper_targets === 0);
+  const hasNoShootTargets = stage.no_shoot_targets > 0;
+  const hasAnyTargets =
+    paperTargets.length > 0 || steelTargets.length > 0 || npmTargets.length > 0 || noShootTargets.length > 0;
+
+  const subtitleParts: string[] = [];
+  if (stage.paper_targets > 0) subtitleParts.push(t('scoring.paperTargetsShort', { count: stage.paper_targets, hpp }));
+  if (stage.steel_targets > 0) subtitleParts.push(`${stage.steel_targets} ${t('scoring.steelTargets')}`);
+  if (hasNoShootTargets) subtitleParts.push(t('scoring.noShootTargets'));
+  if (stage.npm_targets > 0) subtitleParts.push(`${stage.npm_targets} ${t('scoring.npmTargets')}`);
+  const subtitle = subtitleParts.join(' • ');
 
   return {
     paperTargets,
@@ -462,6 +488,7 @@ export function useIPSCScoring(stage: Stage, score: ScoreInput) {
     handleSteelMissDecrement,
     handleNpmHitIncrement,
     handleNpmHitDecrement,
+    handleNpmHitChange,
     handleResetNpm,
     handleNoShootChange,
     handleTimeChange,
@@ -474,6 +501,9 @@ export function useIPSCScoring(stage: Stage, score: ScoreInput) {
     isFixedTime,
     showExtraPenalties,
     hasSidebar,
+    hasNoShootTargets,
+    hasAnyTargets,
+    subtitle,
     hpp,
   };
 }

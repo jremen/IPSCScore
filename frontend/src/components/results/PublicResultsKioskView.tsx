@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { divisionLabel } from '../../utils/constants';
-import { columnHeader, cellValue } from './ResultsTable';
+import { columnHeader, cellValue } from '../../utils/resultsTable';
 import MatchProgress from '../layout/MatchProgress';
+import KioskShell from './KioskShell';
 import { usePublicResultsKiosk, cellClass, headerClass } from '../../hooks/usePublicResultsKiosk';
 
 /**
@@ -179,13 +179,5 @@ export default function PublicResultsKioskView() {
         </footer>
       )}
     </KioskShell>
-  );
-}
-
-function KioskShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="dark fixed inset-0 flex flex-col overflow-hidden bg-slate-950 text-slate-100">
-      {children}
-    </div>
   );
 }

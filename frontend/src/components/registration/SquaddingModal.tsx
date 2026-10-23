@@ -1,141 +1,41 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
-import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { Modal, ModalHeader, ModalBody, TextInput, ModalFooter, Button, theme } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { useEscClose } from '../../hooks/useEscClose';
-import { useSquadding } from '../../hooks/useSquadding';
-import { api } from '../../services/api';
+import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
+import { twMerge } from 'tailwind-merge';
+import { useSquaddingModal } from '../../hooks/useSquaddingModal';
 import SquadColumn from './SquadColumn';
 import ShooterCard from './ShooterCard';
 import AddShooterToSquadModal from './AddShooterToSquadModal';
-import type { RegistrationWithShooter } from '../../types/scoring';
-import { twMerge } from "tailwind-merge";
-import { seedGroupColors } from '../../utils/groupColors';
-import { generateSquaddingPdf } from '../../utils/squaddingPdf';
-import { nativeSaveAs, saveBlobToDevice } from '../../utils/exportUtils';
-import { useUIStore } from '../../stores/uiStore';
-
-interface SquaddingModalProps {
-  show: boolean;
-  onClose: () => void;
-  matchId: string;
-  onUpdated?: () => void;
-}
+import type { SquaddingModalProps } from './types';
 
 export default function SquaddingModal({ show, onClose, matchId, onUpdated }: SquaddingModalProps) {
   const { t } = useTranslation();
-  const addToast = useUIStore((s) => s.addToast);
   const {
     registrations,
     columns,
     unassigned,
     squadCount,
     effectiveSquadCount,
-    moveShooter,
-    assignShooterToSquad,
     addSquad,
-    flushPending,
-    refresh,
     query,
     setQuery,
     totalShooterCount,
-  } = useSquadding(show ? matchId : null);
-
-  const [activeRegistration, setActiveRegistration] = useState<RegistrationWithShooter | null>(null);
-  const [addShooterSquad, setAddShooterSquad] = useState<number | null>(null);
-
-  useEffect(() => {
-    seedGroupColors(registrations.map((r) => r.group_id));
-  }, [registrations]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
-  );
-
-  const handleClose = useCallback(async () => {
-    setQuery('');
-    await flushPending();
-    onUpdated?.();
-    onClose();
-  }, [setQuery, flushPending, onUpdated, onClose]);
-  useEscClose(handleClose);
-
-  const handleDragStart = useCallback((event: any) => {
-    const { active } = event;
-    const reg = active?.data?.current?.registration as RegistrationWithShooter | undefined;
-    if (reg) setActiveRegistration(reg);
-  }, []);
-
-  const handleDragEnd = useCallback((event: any) => {
-    const { active, over } = event;
-    setActiveRegistration(null);
-
-    if (!over) return;
-    const shooterId = active?.data?.current?.registration?.shooter_id as string | undefined;
-    if (!shooterId) return;
-
-    const overId = over.id as string;
-    if (overId.startsWith('squad-')) {
-      const squad = parseInt(overId.replace('squad-', ''), 10);
-      if (!isNaN(squad)) moveShooter(shooterId, squad);
-    }
-  }, [moveShooter]);
-
-  const handleAddShooter = useCallback((registrationId: string) => {
-    if (addShooterSquad === null) return;
-    assignShooterToSquad(registrationId, addShooterSquad);
-  }, [addShooterSquad, assignShooterToSquad]);
-
-  const handleRemoveFromGroup = useCallback(async (registrationId: string) => {
-    if (!matchId) return;
-    await api.ungroupRegistration(matchId, registrationId);
-    refresh();
-  }, [matchId, refresh]);
-
-  const handleGeneratePdf = useCallback(async () => {
-    const orderedSquadNumbers = Object.keys(columns)
-      .map(Number)
-      .sort((a, b) => a - b);
-
-    const matchInfo = await api.getMatch(matchId);
-    const matchName = matchInfo.name || 'Squadding';
-    const matchDate = matchInfo.date ? new Date(matchInfo.date).toLocaleDateString() : '';
-
-    const doc = await generateSquaddingPdf({
-      matchName,
-      matchDate,
-      columns,
-      orderedSquadNumbers,
-    });
-
-    const blob = doc.output('blob');
-    const baseName = matchName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const defaultName = `${baseName}_squadding.pdf`;
-
-    // Desktop: let the user pick a destination. On device: write to Documents.
-    const pickedFile = await nativeSaveAs(blob, defaultName, [
-      { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } },
-    ]);
-    if (pickedFile) return;
-
-    const saved = await saveBlobToDevice(blob, defaultName);
-    addToast(t(saved ? 'results.pdfExported' : 'results.exportFailed'), saved ? 'success' : 'error');
-  }, [columns, matchId, addToast, t]);
-
-  const showUnassigned = unassigned.length > 0;
-
-  const filteredUnassigned = useMemo(() => {
-    if (!query) return unassigned;
-    const q = query.toLowerCase();
-    return unassigned.filter((r) => {
-      const name = `${r.first_name} ${r.last_name}`.toLowerCase();
-      return name.includes(q);
-    });
-  }, [unassigned, query]);
+    addShooterSquad,
+    setAddShooterSquad,
+    filteredUnassigned,
+    activeRegistration,
+    sensors,
+    handleDragStart,
+    handleDragEnd,
+    handleClose,
+    handleAddShooter,
+    handleRemoveFromGroup,
+    handleGeneratePdf,
+  } = useSquaddingModal({ show, matchId, onClose, onUpdated });
 
   return (
     <>
-      <Modal show={show} onClose={handleClose} size="full" theme={{content: {inner: twMerge(theme.modal.content.inner, "min-h-[70vh]")}}}>
+      <Modal show={show} onClose={handleClose} size="full" theme={{ content: { inner: twMerge(theme.modal.content.inner, 'min-h-[70vh]') } }}>
         <ModalHeader>
           <span className="flex items-baseline gap-3">
             <span className="text-xl font-semibold text-gray-900 dark:text-white">{t('squadding.title')}</span>
@@ -169,14 +69,14 @@ export default function SquaddingModal({ show, onClose, matchId, onUpdated }: Sq
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
               >
-                <div className="flex flex-wrap gap-4">
-                  {showUnassigned && (
+                <div className="flex flex-1 h-auto! gap-4">
+                  {unassigned.length > 0 && (
                     <div className="flex flex-col min-w-65 max-w-75 bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
                       <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
                         <span className="font-semibold text-sm dark:text-white">{t('squadding.unassigned')}</span>
                         <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">({unassigned.length})</span>
                       </div>
-                      <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-20 max-h-100">
+                      <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-20 max-h-130">
                         {filteredUnassigned.length > 0 ? (
                           filteredUnassigned.map((r) => (
                             <ShooterCard key={r.shooter_id} registration={r} onRemoveFromGroup={handleRemoveFromGroup} />
@@ -190,36 +90,31 @@ export default function SquaddingModal({ show, onClose, matchId, onUpdated }: Sq
                     </div>
                   )}
 
-                  {Array.from({ length: effectiveSquadCount }, (_, i) => i + 1).map((n) => (
-                    <SquadColumn
-                      key={n}
-                      squadNumber={n}
-                      shooters={columns[n] || []}
-                      onAddShooter={() => setAddShooterSquad(n)}
-                      onRemoveFromGroup={handleRemoveFromGroup}
-                      query={query}
-                    />
-                  ))}
-
-                  <Button
-                    type="button"
-                    className="my-auto"
-                    onClick={addSquad}
-                  >
-                    {t('squadding.addSquad', 'Squad')}
-                  </Button>
+                  <div className="flex flex-wrap gap-4">
+                    {Array.from({ length: effectiveSquadCount }, (_, i) => i + 1).map((n) => (
+                      <SquadColumn
+                        key={n}
+                        squadNumber={n}
+                        shooters={columns[n] || []}
+                        onAddShooter={() => setAddShooterSquad(n)}
+                        onRemoveFromGroup={handleRemoveFromGroup}
+                        query={query}
+                      />
+                    ))}
+                  </div>
                 </div>
 
                 <DragOverlay>
-                  {activeRegistration && (
-                    <ShooterCard registration={activeRegistration} isDragging />
-                  )}
+                  {activeRegistration && <ShooterCard registration={activeRegistration} isDragging />}
                 </DragOverlay>
               </DndContext>
             </>
           )}
         </ModalBody>
         <ModalFooter>
+          <Button type="button" className="mx-auto" onClick={addSquad}>
+            {t('squadding.addSquad', 'Squad')}
+          </Button>
           <Button onClick={handleClose} color="gray">{t('common.close')}</Button>
           <Button onClick={handleGeneratePdf} color="blue">{t('squadding.generatePdf', 'Generate PDF')}</Button>
         </ModalFooter>
@@ -227,14 +122,13 @@ export default function SquaddingModal({ show, onClose, matchId, onUpdated }: Sq
 
       {addShooterSquad !== null && (
         <AddShooterToSquadModal
-          show={true}
+          show
           onClose={() => setAddShooterSquad(null)}
           targetSquad={addShooterSquad}
           registrations={registrations}
           onAdd={handleAddShooter}
         />
       )}
-
     </>
   );
 }

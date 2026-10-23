@@ -1,120 +1,56 @@
-import { useEffect, useState } from 'react';
 import { Button, Badge, TextInput, Label, Modal, ModalHeader, ModalBody, ModalFooter, Checkbox, ToggleSwitch } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { useCupStore } from '../../stores/cupStore';
-import { useUIStore } from '../../stores/uiStore';
-import { CATEGORIES, categoryLabel, divisionLabel, formatDate } from '../../utils/constants';
-import { useEscClose } from '../../hooks/useEscClose';
+import { CATEGORIES, formatDate } from '../../utils/constants';
 import { TbArrowBack, TbPlus, TbTrash, TbPencil } from 'react-icons/tb';
-import useCupExport, { type CupTab } from '../../hooks/useCupExport';
-import CupResultsTable from './CupResultsTable';
-import type { CupResultRow } from '../../types/cup';
-import { MatchPicker } from './CreateCupModal';
+import { CUP_TABS } from '../../utils/cup';
+import { useCupDetail } from '../../hooks/useCupDetail';
+import CupDetailResults from './CupDetailResults';
+import AddCupMatchesModal from './AddCupMatchesModal';
+import type { CupDetailProps } from './types';
 
-const CUP_TABS: { key: CupTab; labelKey: string }[] = [
-  { key: 'byDivision', labelKey: 'results.byDivision' },
-  { key: 'overall', labelKey: 'results.overall' },
-  { key: 'byCategory', labelKey: 'results.byCategory' },
-  { key: 'byTag', labelKey: 'results.byTag' },
-];
-
-function AddCupMatchesModal({ show, onClose, cupId, existingIds }: { show: boolean; onClose: () => void; cupId: string; existingIds: string[] }) {
+export default function CupDetail({ cupId, onBack }: CupDetailProps) {
   const { t } = useTranslation();
-  const addMatches = useCupStore((s) => s.addMatches);
-  const addToast = useUIStore((s) => s.addToast);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [saving, setSaving] = useState(false);
-  useEscClose(onClose);
-
-  useEffect(() => {
-    if (show) setSelected(new Set());
-  }, [show]);
-
-  const handleSave = async () => {
-    if (selected.size === 0) return;
-    setSaving(true);
-    try {
-      await addMatches(cupId, Array.from(selected));
-      addToast(t('cups.matchesAdded'), 'success');
-      onClose();
-    } catch (err: any) {
-      addToast(err.message || t('common.unknownError'), 'error');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Modal show={show} onClose={onClose} size="lg">
-      <ModalHeader>{t('cups.addMatches')}</ModalHeader>
-      <ModalBody>
-        <p className="text-sm text-gray-500 mb-2">{t('cups.addMatchesHint')}</p>
-        <MatchPicker selected={selected} onToggle={(id) => setSelected((prev) => {
-          const next = new Set(prev);
-          if (next.has(id)) next.delete(id);
-          else next.add(id);
-          return next;
-        })} excludeIds={new Set(existingIds)} />
-      </ModalBody>
-      <ModalFooter>
-        <Button size="sm" color="green" onClick={handleSave} disabled={saving || selected.size === 0}>
-          {saving ? t('common.loading') : t('cups.addMatches')}
-        </Button>
-        <Button size="sm" color="gray" onClick={onClose}>{t('common.cancel')}</Button>
-      </ModalFooter>
-    </Modal>
-  );
-}
-
-export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: () => void }) {
-  const { t } = useTranslation();
-  const detail = useCupStore((s) => s.detail);
-  const results = useCupStore((s) => s.results);
-  const loading = useCupStore((s) => s.loading);
-  const fetchCup = useCupStore((s) => s.fetchCup);
-  const fetchCupResults = useCupStore((s) => s.fetchCupResults);
-  const updateCup = useCupStore((s) => s.updateCup);
-  const removeMatch = useCupStore((s) => s.removeMatch);
-  const addToast = useUIStore((s) => s.addToast);
-
-  const [tab, setTab] = useState<CupTab>('byDivision');
-  const [minInput, setMinInput] = useState('');
-  const [savingMin, setSavingMin] = useState(false);
-  const [minPartInput, setMinPartInput] = useState('');
-  const [savingMinPart, setSavingMinPart] = useState(false);
-  const [selectedCats, setSelectedCats] = useState<string[]>([]);
-  const [savingCats, setSavingCats] = useState(false);
-  const [showEditCup, setShowEditCup] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [savingName, setSavingName] = useState(false);
-  const [showAddMatches, setShowAddMatches] = useState(false);
-  const [showMinError, setShowMinError] = useState(false);
-  const [showMinPartError, setShowMinPartError] = useState(false);
-  const [showAllShooters, setShowAllShooters] = useState(true);
-  const [limitInput, setLimitInput] = useState('3');
-
-  const displayLimit = (): number | null => {
-    if (showAllShooters) return null;
-    const parsed = Number(limitInput);
-    return Number.isInteger(parsed) && parsed >= 1 ? parsed : null;
-  };
-
-  const limitedRows = (rows: CupResultRow[]) => {
-    const limit = displayLimit();
-    return limit != null ? rows.slice(0, limit) : rows;
-  };
-
-  const cupExport = useCupExport(tab, displayLimit());
-
-  useEffect(() => { fetchCup(cupId); fetchCupResults(cupId); }, [cupId, fetchCup, fetchCupResults]);
-
-  useEffect(() => {
-    if (!detail) return;
-    setMinInput(detail.minimum_matches != null ? String(detail.minimum_matches) : '');
-    setMinPartInput(detail.minimum_participants != null ? String(detail.minimum_participants) : '');
-    setSelectedCats(detail.selected_categories ?? []);
-    setLimitInput(String(detail.minimum_participants ?? 3));
-  }, [detail]);
+  const {
+    detail,
+    results,
+    loading,
+    tab,
+    setTab,
+    minInput,
+    setMinInput,
+    savingMin,
+    minPartInput,
+    setMinPartInput,
+    savingMinPart,
+    selectedCats,
+    savingCats,
+    showEditCup,
+    setShowEditCup,
+    editName,
+    setEditName,
+    savingName,
+    showAddMatches,
+    setShowAddMatches,
+    showMinError,
+    showMinPartError,
+    showAllShooters,
+    setShowAllShooters,
+    limitInput,
+    setLimitInput,
+    mode,
+    autoMin,
+    required,
+    requiredParticipants,
+    cupExport,
+    saveMinimum,
+    saveMinimumParticipants,
+    toggleCategory,
+    saveCategories,
+    openEditCup,
+    saveEditName,
+    handleRemoveMatch,
+    getLimitedRows,
+  } = useCupDetail(cupId);
 
   if (!detail) {
     return (
@@ -124,90 +60,6 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
       </div>
     );
   }
-
-  const mode = results?.scoring_mode ?? detail.scoring_mode;
-  const matchCount = results?.matches?.length ?? detail.matches.length;
-  const autoMin = Math.floor(matchCount / 2) + 1;
-  const required = results?.minimum_matches ?? detail.minimum_matches ?? autoMin;
-  const requiredParticipants = results?.minimum_participants ?? detail.minimum_participants;
-
-  const saveMinimum = async () => {
-    setShowMinError(false);
-    const parsed = Number(minInput);
-    if (minInput !== '' && (!Number.isInteger(parsed) || parsed < 1)) {
-      setShowMinError(true);
-      return;
-    }
-    setSavingMin(true);
-    try {
-      await updateCup(cupId, { minimum_matches: minInput === '' ? null : parsed });
-      addToast(t('cups.updated'), 'success');
-    } catch (err: any) {
-      addToast(err.message || t('common.unknownError'), 'error');
-    } finally {
-      setSavingMin(false);
-    }
-  };
-
-  const saveMinimumParticipants = async () => {
-    setShowMinPartError(false);
-    const parsed = Number(minPartInput);
-    if (minPartInput !== '' && (!Number.isInteger(parsed) || parsed < 1)) {
-      setShowMinPartError(true);
-      return;
-    }
-    setSavingMinPart(true);
-    try {
-      await updateCup(cupId, { minimum_participants: minPartInput === '' ? null : parsed });
-      addToast(t('cups.updated'), 'success');
-    } catch (err: any) {
-      addToast(err.message || t('common.unknownError'), 'error');
-    } finally {
-      setSavingMinPart(false);
-    }
-  };
-
-  const toggleCategory = (value: string) => {
-    setSelectedCats((prev) => prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]);
-  };
-
-  const saveCategories = async () => {
-    setSavingCats(true);
-    try {
-      await updateCup(cupId, { selected_categories: selectedCats.length > 0 ? selectedCats : null });
-      addToast(t('cups.updated'), 'success');
-    } catch (err: any) {
-      addToast(err.message || t('common.unknownError'), 'error');
-    } finally {
-      setSavingCats(false);
-    }
-  };
-
-  const saveEditName = async () => {
-    if (!editName.trim()) {
-      addToast(t('cups.nameRequired'), 'error');
-      return;
-    }
-    setSavingName(true);
-    try {
-      await updateCup(cupId, { name: editName.trim() });
-      addToast(t('cups.updated'), 'success');
-      setShowEditCup(false);
-    } catch (err: any) {
-      addToast(err.message || t('common.unknownError'), 'error');
-    } finally {
-      setSavingName(false);
-    }
-  };
-
-  const handleRemoveMatch = async (matchId: string) => {
-    try {
-      await removeMatch(cupId, matchId);
-      addToast(t('cups.matchRemoved'), 'success');
-    } catch (err: any) {
-      addToast(err.message || t('common.unknownError'), 'error');
-    }
-  };
 
   return (
     <div className="p-4 mx-auto">
@@ -221,7 +73,7 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
         {requiredParticipants != null && (
           <Badge color="gray" size="sm">{t('cups.requiredParticipants', { n: requiredParticipants })}</Badge>
         )}
-        <Button size="xs" color="light" onClick={() => { setEditName(detail.name); setShowEditCup(true); }}><TbPencil className="mr-1.5" /> {t('common.edit')}</Button>
+        <Button size="xs" color="light" onClick={openEditCup}><TbPencil className="mr-1.5" /> {t('common.edit')}</Button>
       </div>
 
       <div className="flex flex-wrap gap-4 2xl:gap-24 mb-4">
@@ -229,7 +81,9 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
           <Label>{t('cups.minimumMatches')}</Label>
           <div className="flex gap-2 items-center">
             <TextInput
-              type="number" min={1} className="w-28"
+              type="number"
+              min={1}
+              className="w-28"
               value={minInput}
               onChange={(e) => setMinInput(e.target.value)}
               placeholder={t('cups.minimumMatchesAuto', { n: autoMin })}
@@ -246,7 +100,9 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
           <Label>{t('cups.minimumParticipants')}</Label>
           <div className="flex gap-2 items-center">
             <TextInput
-              type="number" min={1} className="w-28"
+              type="number"
+              min={1}
+              className="w-28"
               value={minPartInput}
               onChange={(e) => setMinPartInput(e.target.value)}
             />
@@ -261,14 +117,14 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
         <div>
           <Label>{t('cups.outputCategories')}</Label>
           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-            {CATEGORIES.filter((c) => c.value !== 'regular').map((c) => (
-              <label key={c.value} className="flex items-center gap-2 text-sm cursor-pointer">
+            {CATEGORIES.filter((category) => category.value !== 'regular').map((category) => (
+              <label key={category.value} className="flex items-center gap-2 text-sm cursor-pointer">
                 <Checkbox
                   className="size-4"
-                  checked={selectedCats.includes(c.value)}
-                  onChange={() => toggleCategory(c.value)}
+                  checked={selectedCats.includes(category.value)}
+                  onChange={() => toggleCategory(category.value)}
                 />
-                <span className="dark:text-white">{t(c.i18nKey)}</span>
+                <span className="dark:text-white">{t(category.i18nKey)}</span>
               </label>
             ))}
           </div>
@@ -284,11 +140,11 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
           <Label>{t('cups.matches')}</Label>
           <div className="space-y-1">
             {detail.matches.length === 0 && <p className="text-sm text-gray-500">{t('cups.noMatches')}</p>}
-            {detail.matches.map((m) => (
-              <div key={m.id} className="flex items-center gap-2 text-sm">
-                <span className="dark:text-white">{m.name}</span>
-                <span className="text-gray-500 text-xs">{formatDate(m.date)}</span>
-                <Button size="xs" color="red" className="ml-auto" onClick={() => handleRemoveMatch(m.id)}>
+            {detail.matches.map((match) => (
+              <div key={match.id} className="flex items-center gap-2 text-sm">
+                <span className="dark:text-white">{match.name}</span>
+                <span className="text-gray-500 text-xs">{formatDate(match.date)}</span>
+                <Button size="xs" color="red" className="ml-auto" onClick={() => handleRemoveMatch(match.id)}>
                   <TbTrash />
                 </Button>
               </div>
@@ -302,33 +158,35 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
 
       <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
         <div className="flex flex-wrap gap-x-1 border-b border-gray-200 dark:border-gray-700 -mb-px" role="tablist">
-          {CUP_TABS.map((tb) => (
+          {CUP_TABS.map((cupTab) => (
             <button
-              key={tb.key}
+              key={cupTab.key}
               role="tab"
-              aria-selected={tab === tb.key}
-              onClick={() => setTab(tb.key)}
+              aria-selected={tab === cupTab.key}
+              onClick={() => setTab(cupTab.key)}
               className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                tab === tb.key
+                tab === cupTab.key
                   ? 'border-blue-600 text-blue-600 dark:border-blue-500 dark:text-blue-500'
                   : 'cursor-pointer border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
               }`}
             >
-              {t(tb.labelKey)}
+              {t(cupTab.labelKey)}
             </button>
           ))}
         </div>
-        
+
         <div className="flex items-center gap-3 flex-wrap no-print">
           <div className="flex items-center gap-2">
             <ToggleSwitch
               checked={showAllShooters}
-              onChange={(v) => setShowAllShooters(v)}
+              onChange={setShowAllShooters}
               label={t('cups.showAllShooters')}
             />
             {!showAllShooters && (
               <TextInput
-                type="number" min={1} className="w-20"
+                type="number"
+                min={1}
+                className="w-20"
                 value={limitInput}
                 title={t('cups.shootersToShow')}
                 onChange={(e) => setLimitInput(e.target.value)}
@@ -345,86 +203,15 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
       </div>
 
       {loading && !results && <p className="text-gray-500">{t('common.loading')}</p>}
+      {results && <CupDetailResults results={results} tab={tab} mode={mode} getLimitedRows={getLimitedRows} />}
 
-      {results && results.matches.length === 0 && (
-        <p className="text-gray-500 mt-4">{t('cups.noMatches')}</p>
-      )}
-
-      {results && results.matches.length > 0 && tab === 'byDivision' && (
-        <div>
-          {Object.entries(results.results.byDivision)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([division, rows]) => (
-              <div key={division} className="mb-6">
-                <h3 className="font-semibold text-lg mb-2 dark:text-white">{divisionLabel(division)}</h3>
-                <CupResultsTable rows={limitedRows(rows)} matches={results.matches} mode={mode} hasDivision={false} />
-              </div>
-            ))}
-          {Object.keys(results.results.byDivision).length === 0 && (
-            <p className="text-gray-500 mt-4">{t('cups.noQualified')}</p>
-          )}
-        </div>
-      )}
-
-      {results && results.matches.length > 0 && tab === 'overall' && (
-        <div>
-          <CupResultsTable rows={limitedRows(results.results.overall)} matches={results.matches} mode={mode} hasDivision={true} />
-        </div>
-      )}
-
-      {results && results.matches.length > 0 && tab === 'byCategory' && (
-        <div>
-          {Object.entries(results.results.byCategory)
-            .filter(([cat]) => cat !== 'regular')
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([cat, divisions]) => (
-              <div key={cat} className="mb-6">
-                <h3 className="font-semibold text-lg mb-2 dark:text-white">{categoryLabel(cat)}</h3>
-                {Object.entries(divisions)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([division, rows]) => (
-                    <div key={division} className="mb-4 ml-2">
-                      <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
-                      <CupResultsTable rows={limitedRows(rows)} matches={results.matches} mode={mode} hasDivision={false} />
-                    </div>
-                  ))}
-              </div>
-            ))}
-        </div>
-      )}
-
-      {results && results.matches.length > 0 && tab === 'byTag' && (
-        <div>
-          {Object.entries(results.results.byTag)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([tag, divisions]) => (
-              <div key={tag} className="mb-6">
-                <h3 className="font-semibold text-lg mb-2 dark:text-white">{t('results.tag', { tag })}</h3>
-                {Object.entries(divisions)
-                  .sort(([a], [b]) => a.localeCompare(b))
-                  .map(([division, rows]) => (
-                    <div key={division} className="mb-4 ml-2">
-                      <h4 className="font-medium text-sm text-gray-600 dark:text-gray-400 mb-1">{divisionLabel(division)}</h4>
-                      <CupResultsTable rows={limitedRows(rows)} matches={results.matches} mode={mode} hasDivision={false} />
-                    </div>
-                  ))}
-              </div>
-            ))}
-          {Object.keys(results.results.byTag).length === 0 && (
-            <p className="text-gray-500 mt-4">{t('cups.noTags')}</p>
-          )}
-        </div>
-      )}
-
-      {/* Add matches */}
       <AddCupMatchesModal
         show={showAddMatches}
         onClose={() => setShowAddMatches(false)}
         cupId={cupId}
-        existingIds={detail.matches.map((m) => m.id)}
+        existingIds={detail.matches.map((match) => match.id)}
       />
 
-      {/* Edit cup modal — name + read-only scoring info */}
       <Modal show={showEditCup} onClose={() => setShowEditCup(false)} size="md">
         <ModalHeader>{t('cups.editCup', { name: detail.name })}</ModalHeader>
         <ModalBody>
@@ -447,7 +234,6 @@ export default function CupDetail({ cupId, onBack }: { cupId: string; onBack: ()
         </ModalFooter>
       </Modal>
 
-      {/* Save-as modal (falls back when native picker unavailable) */}
       <Modal show={cupExport.saveModal?.open ?? false} onClose={() => cupExport.setSaveModal(null)} size="md">
         <ModalHeader>{t('results.saveAs')}</ModalHeader>
         <ModalBody>

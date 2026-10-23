@@ -1,11 +1,7 @@
-import { AnchorHTMLAttributes, ReactNode } from 'react';
 import { useHelpNavigation } from '../../hooks/useHelpNavigation';
+import { getHelpSectionByMarkdown } from '../../config/helpSections';
 import { type TabId } from '../../stores/uiStore';
-
-interface HelpLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
-  href?: string;
-  children?: ReactNode;
-}
+import type { HelpLinkProps } from './types';
 
 /**
  * Custom link renderer for markdown content in the help modal.
@@ -14,10 +10,11 @@ interface HelpLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
  *   app-action:<name>  – switch to the right tab and trigger a menu action
  *                        (e.g. "app-action:new-match" opens the New Match modal)
  *   app-tab:<tabId>    – switch to a tab without triggering an action
+ *   page.md            – open another help section
  *   http(s)://…        – external link, opens in a new tab
  *   #…                 – in-page anchor (default behavior)
  */
-export default function HelpLink({ href, children, ...rest }: HelpLinkProps) {
+export default function HelpLink({ href, children, onNavigateSection, ...rest }: HelpLinkProps) {
   const { navigate, navigateToTab } = useHelpNavigation();
 
   if (!href) {
@@ -62,6 +59,32 @@ export default function HelpLink({ href, children, ...rest }: HelpLinkProps) {
         {children}
       </a>
     );
+  }
+
+  // Relative markdown link — open another help section in place.
+  const relativeFile = href.replace(/^\.\//, '').split('#')[0];
+  if (
+    onNavigateSection &&
+    !relativeFile.startsWith('/') &&
+    !relativeFile.includes('/') &&
+    relativeFile.endsWith('.md')
+  ) {
+    const section = getHelpSectionByMarkdown(relativeFile);
+    if (section) {
+      return (
+        <a
+          {...rest}
+          href={href}
+          className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+          onClick={(e) => {
+            e.preventDefault();
+            onNavigateSection(section.id);
+          }}
+        >
+          {children}
+        </a>
+      );
+    }
   }
 
   // External link

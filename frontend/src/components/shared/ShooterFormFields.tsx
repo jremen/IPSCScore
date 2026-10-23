@@ -2,34 +2,10 @@ import { TextInput, Select, Label } from 'flowbite-react';
 import { InputField } from './InputField';
 import { useTranslation } from 'react-i18next';
 import { CATEGORIES, POWER_FACTORS, getDivisionsForMatch, getDivisionsForOrganization, getGroupedDivisions } from '../../utils/constants';
+import type { ShooterFormFieldsProps } from './types';
 import type { Category, Division, PowerFactor } from '../../types/shooter';
 
-export interface ShooterFormData {
-  first_name: string;
-  last_name: string;
-  category: Category | string;
-  division: Division | string;
-  power_factor: PowerFactor | string;
-  region: string;
-  tag: string | null;
-  email: string | null;
-}
-
-interface ShooterFormFieldsProps {
-  form: ShooterFormData;
-  onChange: (form: ShooterFormData) => void;
-  showTagAndEmail?: boolean;
-  showSquad?: boolean;
-  squad?: string;
-  onSquadChange?: (squad: string) => void;
-  /** Organization to filter divisions by (e.g. 'IPSC', 'USPSA') */
-  organization?: string;
-  /** Hide the division selector for sports that do not use divisions (archery). */
-  showDivision?: boolean;
-  /** Firearm type to filter divisions by (e.g. 'rifle', 'shotgun').
-   *  Takes precedence over `organization` for IPSC Rifle/Shotgun matches. */
-  firearmType?: string;
-}
+export type { ShooterFormData } from './types';
 
 /** Shared shooter form fields — used by both MatchRegistration and ShooterDatabase */
 export default function ShooterFormFields({ form, onChange, showTagAndEmail = true, showSquad = false, squad, onSquadChange, showDivision = true, organization, firearmType }: ShooterFormFieldsProps) {

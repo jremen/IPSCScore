@@ -1,38 +1,9 @@
 import { Modal, ModalHeader, ModalBody } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useScoringStore } from '../../stores/scoringStore';
-import { useStageStore } from '../../stores/stageStore';
-import { useEscClose } from '../../hooks/useEscClose';
-
-export interface StagePickerModalProps {
-  show: boolean;
-  onClose: () => void;
-}
+import { useStagePickerModal } from '../../hooks/useStagePickerModal';
+import type { StagePickerModalProps } from './types';
 
 export default function StagePickerModal({ show, onClose }: StagePickerModalProps) {
-  const { t } = useTranslation();
-  const stages = useStageStore((s) => s.stages);
-  const activeStageId = useScoringStore((s) => s.activeStageId);
-  const setActiveStageId = useScoringStore((s) => s.setActiveStageId);
-  const registrations = useScoringStore((s) => s.registrations);
-  const scoringProgress = useScoringStore((s) => s.scoringProgress);
-
-  useEscClose(show ? onClose : undefined);
-
-  const handleSelect = (stageId: string) => {
-    setActiveStageId(stageId);
-    onClose();
-  };
-
-  const stageScored = (stageId: string) => {
-    if (!scoringProgress || registrations.length === 0) return false;
-    const scoredIds = new Set(
-      scoringProgress.scored
-        .filter((e: { stage_id: string }) => e.stage_id === stageId)
-        .map((e: { registration_id: string }) => e.registration_id)
-    );
-    return registrations.every((r) => r.is_dq || scoredIds.has(r.id));
-  };
+  const { t, stages, activeStageId, selectStage, stageScored } = useStagePickerModal(show, onClose);
 
   return (
     <Modal show={show} onClose={onClose} size="sm" dismissible>
@@ -46,7 +17,7 @@ export default function StagePickerModal({ show, onClose }: StagePickerModalProp
             return (
               <button
                 key={stage.id}
-                onClick={() => handleSelect(stage.id)}
+                onClick={() => selectStage(stage.id)}
                 className={`w-full text-left p-3 rounded-lg transition-colors flex items-center justify-between
                   ${isActive
                     ? 'bg-blue-50 dark:bg-blue-900/30 ring-1 ring-blue-300 dark:ring-blue-700 text-blue-700 dark:text-blue-300 eink:bg-black! eink:text-white! eink:ring-2! eink:ring-black!'

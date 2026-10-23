@@ -1,49 +1,47 @@
 import { Button, Badge } from 'flowbite-react';
-import { useState, useMemo } from 'react';
-
 import { divisionLabel } from '../../utils/constants';
-import { useConstLabels } from '../../hooks/useConstLabels';
-
 import ScoringSheet from './ScoringSheet';
 import ScoreSummarySheet from './ScoreSummarySheet';
 import ShooterListScreen from './ShooterListScreen';
 import RescoreConfirmModal from './shared/RescoreConfirmModal';
 import SquadFilterBar from './SquadFilterBar';
 import { TbChevronLeft, TbChevronRight } from "react-icons/tb";
-import { useScoringNav } from "../../hooks/useScoringNav";
-import { useScoringStore } from "../../stores/scoringStore";
-import { useStageStore } from "../../stores/stageStore";
-import { useTranslation } from "react-i18next";
-import { useUIStore } from "../../stores/uiStore";
-import { useTabMenuAction } from '../../hooks/useTabMenuAction';
+import { useScoringNavView } from '../../hooks/useScoringNavView';
 
 export default function ScoringNav() {
-  const activeMatchId = useUIStore((s) => s.activeMatchId);
-  const registrations = useScoringStore((s) => s.registrations);
-  const scoringProgress = useScoringStore((s) => s.scoringProgress);
-  const currentRegistrationId = useScoringStore((s) => s.currentRegistrationId);
-  const currentScore = useScoringStore((s) => s.currentScore);
-  const nextShooter = useScoringStore((s) => s.nextShooter);
-  const prevShooter = useScoringStore((s) => s.prevShooter);
-  const activeStageId = useScoringStore((s) => s.activeStageId);
-  const showSummary = useScoringStore((s) => s.showSummary);
-  const stages = useStageStore((s) => s.stages);
-  const { t } = useTranslation();
-  const { categoryLabel, powerFactorLabel } = useConstLabels();
-  const {currentShooter, currentStage, performSave, handleSelectShooter, handleSummaryBack, handleConfirm, handleStageChange, canConfirm, showRescoreConfirm, handleRescoreConfirm, handleRescoreCancel, stageLoading, stageName, currentShooterName} = useScoringNav();
-  const [showShooterList, setShowShooterList] = useState(false);
-
-  useTabMenuAction('prev-shooter', () => prevShooter());
-  useTabMenuAction('next-shooter', () => nextShooter());
-  useTabMenuAction('confirm-score', () => {
-    if (canConfirm) handleConfirm();
-  });
-
-  const shooterDetails = useMemo(() => currentShooter ? {
-    division: currentShooter.effective_division,
-    category: currentShooter.effective_category,
-    powerFactor: currentShooter.effective_power_factor,
-  } : null, [currentShooter?.effective_division, currentShooter?.effective_category, currentShooter?.effective_power_factor]);
+  const {
+    t,
+    activeMatchId,
+    registrations,
+    scoringProgress,
+    currentRegistrationId,
+    currentScore,
+    activeStageId,
+    showSummary,
+    stages,
+    categoryLabel,
+    powerFactorLabel,
+    nextShooter,
+    prevShooter,
+    showShooterList,
+    shooterDetails,
+    openShooterList,
+    closeShooterList,
+    currentShooter,
+    currentStage,
+    performSave,
+    handleSelectShooter,
+    handleSummaryBack,
+    handleConfirm,
+    handleStageChange,
+    canConfirm,
+    showRescoreConfirm,
+    handleRescoreConfirm,
+    handleRescoreCancel,
+    stageLoading,
+    stageName,
+    currentShooterName,
+  } = useScoringNavView();
 
   if (!activeMatchId) {
     return (
@@ -53,7 +51,6 @@ export default function ScoringNav() {
     );
   }
 
-  // Summary view for remote scorers
   if (showSummary && currentStage && currentScore && currentShooter) {
     return (
       <ScoreSummarySheet
@@ -69,7 +66,6 @@ export default function ScoringNav() {
 
   return (
     <div className="scoring-nav-root">
-      {/* Stage selector tabs — hidden on mobile (use Header picker instead) */}
       <div className="hidden shrink-0 sm:flex overflow-x-auto border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-1 no-print" style={{ WebkitOverflowScrolling: 'touch' }}>
         {stages.map((stage) => (
           <button
@@ -84,14 +80,13 @@ export default function ScoringNav() {
         ))}
       </div>
 
-      {/* Shooter selector with full-screen shooter list — pinned at top on mobile */}
       {activeStageId && (
         <div className="bg-white dark:bg-gray-800 p-2 sm:p-3 border-b border-gray-200 dark:border-gray-700 no-print scoring-nav-pinned">
           <SquadFilterBar />
           <div className="flex items-center justify-between my-2 gap-1">
             <button onClick={prevShooter} disabled={!registrations.length} className="px-3 py-2 text-sm bg-gray-100 dark:bg-gray-700 dark:text-white rounded-lg disabled:opacity-30 min-h-11 min-w-11 flex items-center justify-center"><TbChevronLeft className="size-6" /></button>
             <button
-              onClick={() => setShowShooterList(true)}
+              onClick={openShooterList}
               disabled={!registrations.length}
               className="flex-1 mx-1 sm:mx-2 px-3 py-1 text-lg rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-white text-center hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors min-h-11 truncate eink:bg-black! eink:text-white! eink:border-black!"
             >
@@ -117,14 +112,12 @@ export default function ScoringNav() {
         </div>
       )}
 
-      {/* Shooter list screen — opens as a full-screen overlay */}
       <ShooterListScreen
         show={showShooterList}
-        onClose={() => setShowShooterList(false)}
+        onClose={closeShooterList}
         onSelect={handleSelectShooter}
       />
 
-      {/* Scoring Sheet — only this section scrolls on mobile */}
       <div className="scoring-scroll-area sm:pb-20">
         {activeStageId && currentRegistrationId && currentStage && currentScore ? (
           <ScoringSheet stage={currentStage} score={currentScore} />
@@ -135,7 +128,6 @@ export default function ScoringNav() {
         )}
       </div>
 
-      {/* Bottom bar — pinned at bottom on mobile */}
       {activeStageId && currentRegistrationId && (
       <div className="fixed bottom-0 z-100  w-full bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-2 sm:p-3 flex justify-between items-center no-print scoring-nav-pinned">
           <Button color="gray" onClick={() => prevShooter()} className="min-h-11"><TbChevronLeft className="size-6 mr-1" />{t('common.prev')}</Button>

@@ -2,13 +2,7 @@ import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import { useTranslation } from 'react-i18next';
 import { groupColor } from '../../utils/groupColors';
-import type { RegistrationWithShooter } from '../../types/scoring';
-
-interface ShooterCardProps {
-  registration: RegistrationWithShooter;
-  isDragging?: boolean;
-  onRemoveFromGroup?: (registrationId: string) => void;
-}
+import type { ShooterCardProps } from './types';
 
 export default function ShooterCard({ registration, isDragging, onRemoveFromGroup }: ShooterCardProps) {
   const { t } = useTranslation();

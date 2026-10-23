@@ -2,12 +2,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-rea
 import { useTranslation } from 'react-i18next';
 import { useMatchStore } from '../../stores/matchStore';
 import { useEscClose } from '../../hooks/useEscClose';
-
-interface DeleteMatchModalProps {
-  show: boolean;
-  onClose: () => void;
-  matchId: string | null;
-}
+import type { DeleteMatchModalProps } from './types';
 
 export default function DeleteMatchModal({ show, onClose, matchId }: DeleteMatchModalProps) {
   const deleteMatch = useMatchStore((s) => s.deleteMatch);

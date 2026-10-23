@@ -1,11 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
 import Header from './Header';
 import TabBar from './TabBar';
-import { useUIStore } from '../../stores/uiStore';
-import { useMatchStore } from '../../stores/matchStore';
-import { useAuthStore } from '../../stores/authStore';
-import { api } from '../../services/api';
-import * as offlineDB from '../../services/offlineDB';
 import Matches from '../match/MatchList';
 import Cups from '../cup/CupList';
 import Stages from '../stage/StageList';
@@ -17,183 +11,37 @@ import AdminLoginPage from '../auth/AdminLoginPage';
 import StageLoginPage from '../auth/StageLoginPage';
 import PublicResultsView from '../results/PublicResultsView';
 import PublicResultsKioskView from '../results/PublicResultsKioskView';
-import { isKioskResultsPath } from '../../utils/domainPaths';
 import PublicSquadsView from '../squads/PublicSquadsView';
-import { shouldAttemptApiCall } from '../../services/connectivity';
 import { useTranslation } from 'react-i18next';
-import { useOfflineStatus } from '../../hooks/useOfflineStatus';
-import { useOfflineSync } from '../../hooks/useOfflineSync';
-import { useRealtimeUpdates } from '../../hooks/useRealtimeUpdates';
 import MenuActionListener from '../shared/MenuActionListener';
-import { useScoringStore } from '../../stores/scoringStore';
-import { useStageStore } from '../../stores/stageStore';
+import { useAppLayout } from '../../hooks/useAppLayout';
 
 export default function AppLayout() {
   const { t } = useTranslation();
-  const activeTab = useUIStore((s) => s.activeTab);
-  const activeMatchId = useUIStore((s) => s.activeMatchId);
-  const setActiveMatch = useUIStore((s) => s.setActiveMatch);
-  const fetchMatches = useMatchStore((s) => s.fetchMatches);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const isAdmin = useAuthStore((s) => s.isAdmin);
-  const isLocalNetwork = useAuthStore((s) => s.isLocalNetwork);
-  const domainMode = useAuthStore((s) => s.domainMode);
-  const authenticatedMatchId = useAuthStore((s) => s.authenticatedMatchId);
-  const restoreSession = useAuthStore((s) => s.restoreSession);
-  const logout = useAuthStore((s) => s.logout);
-  const sessionValidated = useRef(false);
-  const [sessionRestoring, setSessionRestoring] = useState(true);
-  const prevActiveMatchId = useRef<string | null>(null);
+  const {
+    activeTab,
+    isAuthenticated,
+    isAdmin,
+    isLocalNetwork,
+    domainMode,
+    authenticatedMatchId,
+    sessionRestoring,
+    isElectron,
+    isScoringTab,
+    isKioskResults,
+  } = useAppLayout();
 
-  // Offline support hooks — always active
-  useOfflineStatus();
-  useOfflineSync();
-  useRealtimeUpdates();
-
-  // Native menu action bridge (Electron only)
-  const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron?.();
   const menuListener = isElectron ? <MenuActionListener /> : null;
 
-  // Request persistent storage so iOS is less likely to evict our data
-  useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.storage?.persist) {
-      navigator.storage.persist().catch(() => {});
-    }
-  }, []);
-
-  // PWA fix: if opened at root (/) in standalone mode, redirect to /scoring
-  // This handles existing PWA installations with start_url: '/' (installed from /)
-  // After redirect, the user is on /scoring where domainMode='scoring' → StageLoginPage
-  useEffect(() => {
-    const isStandalone = typeof window !== 'undefined' && (
-      window.matchMedia('(display-mode: standalone)').matches ||
-      // @ts-ignore — iOS Safari standalone
-      window.navigator.standalone === true
-    );
-    if (isStandalone && window.location.pathname === '/') {
-      window.location.replace('/scoring');
-      return;
-    }
-    (async () => {
-      await restoreSession();
-      setSessionRestoring(false);
-    })();
-    // Safety timeout: if restoreSession hangs (e.g., Safari with no data), stop
-    // showing the spinner after 5 seconds so the user sees the login page.
-    const timeout = setTimeout(() => setSessionRestoring(false), 5000);
-    return () => clearTimeout(timeout);
-  }, [restoreSession]);
-
-  // Eagerly load matches list so tabs like Registration have match data
-  // available for division/organization lookups without depending on the
-  // Matches tab being visited first.
-  useEffect(() => {
-    if (isAuthenticated && isAdmin) {
-      fetchMatches();
-    }
-  }, [isAuthenticated, isAdmin, fetchMatches]);
-
-  // For remote scorers: set the active match ID so scoring UI works without manual selection
-  useEffect(() => {
-    if (isAuthenticated && !isAdmin && authenticatedMatchId) {
-      setActiveMatch(authenticatedMatchId);
-    } else if (!isAuthenticated) {
-      setActiveMatch(null);
-    }
-  }, [isAuthenticated, isAdmin, authenticatedMatchId, setActiveMatch]);
-
-  // On domain-specific views, validate the session against the currently running match.
-  // If a scorer's session is from an old (non-running) match, clear it so they re-authenticate.
-  // On admin view, auto-select the running match when entering scoring/results tabs with no match selected.
-  useEffect(() => {
-    if (domainMode === 'scoring' || domainMode === 'results') {
-      if (sessionValidated.current) return;
-      sessionValidated.current = true;
-
-      (async () => {
-        let currentMatch: any = null;
-
-        // When offline, go straight to IDB — skip the network call entirely
-        // (avoids 30s hang on iOS when the server is unreachable).
-        if (shouldAttemptApiCall()) {
-          try {
-            currentMatch = await api.getCurrentMatch();
-          } catch {
-            // Network fetch timed out or failed — fall through to IDB below
-          }
-        }
-
-        // If network failed or offline, try the cached running match
-        if (!currentMatch?.id) {
-          try {
-            currentMatch = await offlineDB.getCachedCurrentMatch();
-          } catch {
-            // IndexedDB also failed — leave state as-is
-          }
-        }
-
-        if (!currentMatch?.id) return;
-
-        // On domain views, always use the running match
-        setActiveMatch(currentMatch.id);
-
-        // If a scorer is authenticated but for a different (old) match, clear their session
-        if (isAuthenticated && !isAdmin && authenticatedMatchId && authenticatedMatchId !== currentMatch.id) {
-          logout();
-        }
-      })();
-    } else if (isAuthenticated && isAdmin && !activeMatchId && activeTab !== 'matches' && activeTab !== 'cups') {
-      // Admin: auto-select the running match when entering any tab with no match selected.
-      // Previously this was restricted to scoring/results, but Stages and
-      // Registration also need the current match to render anything useful.
-      (async () => {
-        let currentMatch: any = null;
-
-        if (shouldAttemptApiCall()) {
-          try {
-            currentMatch = await api.getCurrentMatch();
-          } catch {
-            // Network fetch failed — fall through to IDB below
-          }
-        }
-
-        if (!currentMatch?.id) {
-          try {
-            currentMatch = await offlineDB.getCachedCurrentMatch();
-          } catch {
-            // leave as-is
-          }
-        }
-
-        if (currentMatch?.id) setActiveMatch(currentMatch.id);
-      })();
-    }
-  }, [domainMode, isAuthenticated, isAdmin, activeTab, activeMatchId, authenticatedMatchId, setActiveMatch, logout]);
-
-  // Reset scoring/stage data when the active match changes
-  useEffect(() => {
-    if (activeMatchId && activeMatchId !== prevActiveMatchId.current) {
-      useScoringStore.getState().resetScoringProgress();
-      useStageStore.getState().resetStages();
-    }
-    prevActiveMatchId.current = activeMatchId;
-  }, [activeMatchId]);
-
-  // Domain mode: /results → show public results (no login needed)
-  // `/results/kiosk` is the TV kiosk variant of the same public view.
   if (domainMode === 'results') {
-    return isKioskResultsPath() ? <PublicResultsKioskView /> : <PublicResultsView />;
+    return isKioskResults ? <PublicResultsKioskView /> : <PublicResultsView />;
   }
 
-  // Domain mode: /squads → show public squads (no login needed)
   if (domainMode === 'squads') {
     return <PublicSquadsView />;
   }
 
-  // Not authenticated → show login page
   if (!isAuthenticated) {
-    // Session restoration still in progress (IDB async hydration) — show
-    // a minimal loader instead of flashing the login page.
     if (sessionRestoring) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -201,19 +49,15 @@ export default function AppLayout() {
         </div>
       );
     }
-    // Domain mode: /scoring → always show stage login (never admin)
     if (domainMode === 'scoring') {
       return <StageLoginPage />;
     }
-    // On local network → show admin login
     if (isLocalNetwork) {
       return <AdminLoginPage />;
     }
-    // Remote → show scorer login
     return <StageLoginPage />;
   }
 
-  // Authenticated scorer — show scoring UI (unrestricted stage selection)
   if (!isAdmin && authenticatedMatchId) {
     return (
       <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
@@ -225,11 +69,6 @@ export default function AppLayout() {
       </div>
     );
   }
-
-  // Admin → full app
-  // Scoring tab needs overflow-hidden on mobile (for sticky header/footer),
-  // all other tabs need overflow-auto for normal scrolling.
-  const isScoringTab = activeTab === 'scoring';
 
   return (
     <div className="h-screen flex flex-col bg-gray-200 dark:bg-gray-900">

@@ -4,9 +4,14 @@ A squad is a numbered group of shooters that run a stage together. A group is a 
 
 ## Groups (car pools)
 
-In the Registration tab, drag a shooter row onto another row to add them to a group. Groups are colored on the right edge of the row.
+In the Registration tab, drag a shooter row onto another row to add them to a group, or select several rows and choose **Group selected**. Groups are coloured on the right edge of the row.
 
 Groups don't assign a squad number by themselves; they only tag shooters as wanting to be together. Use the squadding modal to assign them to a squad.
+
+- Click the coloured bar on a row to remove that shooter from the group.
+- Select grouped rows and choose **Ungroup selected** to remove several at once.
+- Two existing groups cannot be merged. Ungroup one first.
+- When you assign any group member to a squad, every member of that group moves to the same squad.
 
 ## Squads
 

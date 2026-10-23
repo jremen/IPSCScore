@@ -1,61 +1,25 @@
-import { useState, useEffect } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Alert, Spinner } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../services/api';
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface DeleteShooterModalProps {
-  show: boolean;
-  onClose: () => void;
-  shooter: { id: string; first_name: string; last_name: string } | null;
-  onDeleted: () => void;
-}
+import { useDeleteShooterModal } from '../../hooks/useDeleteShooterModal';
+import type { DeleteShooterModalProps } from './types';
 
 export default function DeleteShooterModal({ show, onClose, shooter, onDeleted }: DeleteShooterModalProps) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
-  const [matches, setMatches] = useState<any[]>([]);
-  const [matchesLoading, setMatchesLoading] = useState(false);
-
-  useEscClose(onClose);
-
-  useEffect(() => {
-    if (show && shooter) {
-      setMatchesLoading(true);
-      api.getShooterMatches(shooter.id)
-        .then(setMatches)
-        .catch(() => setMatches([]))
-        .finally(() => setMatchesLoading(false));
-    } else {
-      setMatches([]);
-    }
-  }, [show, shooter]);
-
-  const handleDelete = async () => {
-    if (!shooter) return;
-    setLoading(true);
-    try {
-      await api.deleteShooter(shooter.id);
-      onDeleted();
-      onClose();
-    } catch {
-      // Error toast is handled by the caller
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { loading, matches, matchesLoading, shooterName, handleDelete } = useDeleteShooterModal({
+    show,
+    onClose,
+    shooter,
+    onDeleted,
+  });
 
   if (!shooter) return null;
-  const shooterName = `${shooter.first_name} ${shooter.last_name}`;
 
   return (
     <Modal show={show} onClose={onClose} size="md">
       <ModalHeader>{t('shooters.deleteTitle')}</ModalHeader>
       <ModalBody>
         <div className="space-y-3 dark:text-white">
-          <p>
-            {t('shooters.deleteConfirm', { name: shooterName })}
-          </p>
+          <p>{t('shooters.deleteConfirm', { name: shooterName })}</p>
 
           {matchesLoading ? (
             <div className="flex items-center gap-2 text-sm text-gray-500">
@@ -68,9 +32,10 @@ export default function DeleteShooterModal({ show, onClose, shooter, onDeleted }
                 {t('shooters.deleteRegisteredWarning', { name: shooterName, count: matches.length })}
               </p>
               <ul className="text-sm list-disc pl-4 mt-1">
-                {matches.slice(0, 5).map((m: any) => (
-                  <li key={m.match_id}>
-                    {m.match_name}{m.date ? t('common.parenthesisedDate', { date: new Date(m.date).toLocaleDateString() }) : ''}
+                {matches.slice(0, 5).map((match) => (
+                  <li key={match.match_id}>
+                    {match.match_name}
+                    {match.date ? t('common.parenthesisedDate', { date: new Date(match.date).toLocaleDateString() }) : ''}
                   </li>
                 ))}
                 {matches.length > 5 && (
@@ -79,9 +44,7 @@ export default function DeleteShooterModal({ show, onClose, shooter, onDeleted }
               </ul>
             </Alert>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('shooters.deleteNoMatches')}
-            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t('shooters.deleteNoMatches')}</p>
           )}
 
           <p className="text-sm text-red-600 dark:text-red-400">{t('bulkDelete.cannotBeUndone')}</p>

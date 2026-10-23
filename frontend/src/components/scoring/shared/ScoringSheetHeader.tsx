@@ -1,15 +1,12 @@
 import { useTranslation } from 'react-i18next';
+import type { ScoringSheetHeaderProps } from '../types';
 
 /** Scoring sheet card header with title, subtitle, and optional reset button */
 export default function ScoringSheetHeader({
   title,
   subtitle,
   onReset,
-}: {
-  title?: string;
-  subtitle: string;
-  onReset?: () => void;
-}) {
+}: ScoringSheetHeaderProps) {
   const { t } = useTranslation();
 
   return (

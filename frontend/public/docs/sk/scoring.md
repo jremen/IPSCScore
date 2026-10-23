@@ -8,7 +8,7 @@ Bodovanie znamená vloženie zásahov a času strelca pre danú situáciu. Pre k
 2. **Vyberte strelca** — zoznam strelcov vľavo, alebo tlačidlá **Ďalej** / **Späť** v hlavičke.
 3. **Zadajte zásahy** — papier / oceľ / penalizačný terč / NPM podľa typu bodovania.
 4. **Zadajte čas** — v spodnej časti hárku (alebo navrchu, na mobile).
-5. **Potvrďte a uložte** — administrátori ukladajú priamo. Vzdialení zadávači najprv uvidia súhrnné zobrazenie na kontrolu.
+5. **Potvrďte a uložte** — administrátori ukladajú priamo. Vzdialení zadávači skontrolujú súhrn a kliknú na **Schváliť** pre odoslanie.
 
 Zelené zaškrtnutie vedľa strelca znamená, že je pre aktívnu situáciu hodnotený.
 

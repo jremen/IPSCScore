@@ -2,10 +2,10 @@ import { Badge, Label } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { useDqActions } from '../../../hooks/useDqActions';
 import DqConfirmModal from './DqConfirmModal';
-import type { RegistrationWithShooter } from '../../../types/scoring';
+import type { DqSectionProps } from '../types';
 
 /** DQ status badge, DQ/Undq button, and DQ reason modal — reads from store directly */
-export default function DqSection({ shooter, disabled = false }: { shooter: RegistrationWithShooter | undefined; disabled?: boolean }) {
+export default function DqSection({ shooter, disabled = false }: DqSectionProps) {
   const { dqReason, setDqReason, showDqModal, setShowDqModal, handleDq, handleUndq } = useDqActions();
   const { t } = useTranslation();
 

@@ -1,103 +1,20 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../services/api';
-import * as offlineDB from '../../services/offlineDB';
-import { useUIStore } from '../../stores/uiStore';
 import LanguageSelector from '../settings/LanguageSelector';
 import { ThemeSelector } from '../settings/ThemeSelector';
-import type { RegistrationWithShooter } from '../../types/scoring';
+import { usePublicSquadsView } from '../../hooks/usePublicSquadsView';
 
 export default function PublicSquadsView() {
   const { t } = useTranslation();
-  const setActiveMatch = useUIStore((s) => s.setActiveMatch);
-  const setActiveTab = useUIStore((s) => s.setActiveTab);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<'noCurrentMatch' | 'loadError' | null>(null);
-  const [matchName, setMatchName] = useState<string>('');
-  const [registrations, setRegistrations] = useState<RegistrationWithShooter[]>([]);
-  const [isOffline, setIsOffline] = useState(false);
-
-  const loadData = useCallback(async () => {
-    let currentMatch: any = null;
-
-    try {
-      currentMatch = await api.getCurrentMatch();
-    } catch {
-      try {
-        currentMatch = await offlineDB.getCachedCurrentMatch();
-      } catch {
-        // leave as-is
-      }
-    }
-
-    if (!currentMatch?.id) {
-      setError('noCurrentMatch');
-      setLoading(false);
-      return;
-    }
-
-    setActiveMatch(currentMatch.id);
-    setMatchName(currentMatch.name || '');
-
-    try {
-      const regs = await api.getRegistrations(currentMatch.id);
-      setRegistrations(regs);
-      setIsOffline(false);
-      // Cache for offline use
-      try {
-        await offlineDB.cacheRegistrations(currentMatch.id, regs);
-        await offlineDB.cacheMatches([currentMatch]);
-      } catch {
-        // Non-fatal
-      }
-    } catch {
-      // Try cached data
-      try {
-        const cachedRegs = await offlineDB.getCachedRegistrations(currentMatch.id);
-        if (cachedRegs.length > 0) {
-          setRegistrations(cachedRegs);
-          setIsOffline(true);
-        } else {
-          setError('loadError');
-        }
-      } catch {
-        setError('loadError');
-      }
-    }
-
-    setLoading(false);
-  }, [setActiveMatch]);
-
-  useEffect(() => {
-    setActiveTab('squads');
-    loadData();
-  }, [setActiveTab, loadData]);
-
-  const squadData = useMemo(() => {
-    const grouped: Record<number, RegistrationWithShooter[]> = {};
-    for (const reg of registrations) {
-      const squad = reg.squad ?? 0;
-      if (!grouped[squad]) grouped[squad] = [];
-      grouped[squad].push(reg);
-    }
-    // Sort shooters within each squad by last name
-    for (const squad of Object.keys(grouped)) {
-      grouped[Number(squad)].sort((a, b) =>
-        (a.last_name || '').localeCompare(b.last_name || '')
-      );
-    }
-    return grouped;
-  }, [registrations]);
-
-  const sortedSquads = useMemo(() => {
-    const keys = Object.keys(squadData)
-      .map(Number)
-      .filter((k) => k > 0)
-      .sort((a, b) => a - b);
-    return keys;
-  }, [squadData]);
-
-  const unassigned = squadData[0] || [];
+  const {
+    loading,
+    error,
+    matchName,
+    squadData,
+    sortedSquads,
+    unassigned,
+    isOffline,
+    handleRetry,
+  } = usePublicSquadsView();
 
   if (loading) {
     return (
@@ -114,18 +31,10 @@ export default function PublicSquadsView() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center max-w-md px-4">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
-            📋 {t('squads.publicTitle')}
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
-            {t('squads.noCurrentMatch')}
-          </p>
-          <div className="text-sm text-gray-400 dark:text-gray-500">
-            squads.local
-          </div>
-          <div className="mt-4">
-            <LanguageSelector />
-          </div>
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">📋 {t('squads.publicTitle')}</h1>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">{t('squads.noCurrentMatch')}</p>
+          <div className="text-sm text-gray-400 dark:text-gray-500">squads.local</div>
+          <div className="mt-4"><LanguageSelector /></div>
         </div>
       </div>
     );
@@ -135,16 +44,9 @@ export default function PublicSquadsView() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center max-w-md px-4">
-          <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
-            📋 {t('squads.publicTitle')}
-          </h1>
-          <p className="text-gray-500 dark:text-gray-400 mb-4">
-            {t('squads.loadError')}
-          </p>
-          <button
-            onClick={() => { setError(null); setLoading(true); loadData(); }}
-            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-          >
+          <h1 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">📋 {t('squads.publicTitle')}</h1>
+          <p className="text-gray-500 dark:text-gray-400 mb-4">{t('squads.loadError')}</p>
+          <button onClick={handleRetry} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
             {t('squads.retry')}
           </button>
         </div>
@@ -175,29 +77,25 @@ export default function PublicSquadsView() {
 
       <main className="flex-1 max-w-prose mx-auto w-full px-4 py-6">
         {sortedSquads.length === 0 && unassigned.length === 0 ? (
-          <div className="text-center text-gray-500 dark:text-gray-400 py-12">
-            {t('squads.noShooters')}
-          </div>
+          <div className="text-center text-gray-500 dark:text-gray-400 py-12">{t('squads.noShooters')}</div>
         ) : (
           <div className="space-y-6">
-            {sortedSquads.map((squadNum) => (
-              <div key={squadNum} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
+            {sortedSquads.map((squadNumber) => (
+              <div key={squadNumber} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm overflow-hidden">
                 <div className="px-4 py-3 bg-purple-50 dark:bg-purple-900/30 border-b border-purple-100 dark:border-purple-800">
                   <h2 className="text-4xl font-bold text-purple-800 dark:text-purple-200">
-                    {t('squads.squadN', { number: squadNum })}
+                    {t('squads.squadN', { number: squadNumber })}
                     <span className="ml-2 text-sm font-normal text-purple-600 dark:text-purple-400">
-                      ({t('squads.shooterCount', { count: squadData[squadNum].length })})
+                      ({t('squads.shooterCount', { count: squadData[squadNumber].length })})
                     </span>
                   </h2>
                 </div>
                 <ul className="divide-y divide-gray-100 dark:divide-gray-700">
-                  {squadData[squadNum].map((reg, idx) => (
-                    <li key={reg.id} className="px-4 py-2.5 flex items-center gap-3">
-                      <span className="text-xl text-gray-400 dark:text-gray-500 w-6 text-right tabular-nums">
-                        {idx + 1}
-                      </span>
+                  {squadData[squadNumber].map((registration, index) => (
+                    <li key={registration.id} className="px-4 py-2.5 flex items-center gap-3">
+                      <span className="text-xl text-gray-400 dark:text-gray-500 w-6 text-right tabular-nums">{index + 1}</span>
                       <span className="text-2xl text-gray-800 dark:text-gray-200">
-                        {reg.first_name} {reg.last_name}
+                        {registration.first_name} {registration.last_name}
                       </span>
                     </li>
                   ))}

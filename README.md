@@ -125,9 +125,13 @@ cd frontend && npm install && npm run dev
 
 ```bash
 # Full build (rebuilds frontend + backend + bundles + packages)
-npm run build:mac     # Universal macOS (arm64 + x64)
+npm run build:mac     # macOS arm64
 npm run build:win     # Windows x64
-npm run build:linux   # Linux x64
+npm run build:linux   # Linux x64 AppImage
+npm run build:linux-arm64  # Linux arm64 AppImage
+
+# The Linux AppImages use a static runtime and need no zlib1g-dev package.
+# Normal AppImage mounting still requires FUSE2 on the target system.
 ```
 
 > **Important:** Always rebuild from clean state before packaging. Never package from stale `dist/` artifacts.

@@ -1,164 +1,26 @@
-import { useState } from 'react';
-import { Badge, Button, Checkbox, Table, TableHead, TableBody, TableRow, TableCell, TableHeadCell, Tooltip } from 'flowbite-react';
+import { Table, TableBody, TableHead, TableHeadCell, TableRow } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { DndContext, DragOverlay, closestCenter, PointerSensor, useSensor, useSensors, useDraggable, useDroppable } from '@dnd-kit/core';
-import { useConstLabels } from '../../hooks/useConstLabels';
+import { DragOverlay, DndContext, closestCenter } from '@dnd-kit/core';
 import { divisionLabel } from '../../utils/constants';
-import { groupColor } from '../../utils/groupColors';
+import { useRegistrationDnd } from '../../hooks/useRegistrationDnd';
 import SelectAllCheckbox from '../shared/SelectAllCheckbox';
-import type { useSelection } from '../../hooks/useSelection';
-import type { RegistrationWithShooter } from '../../types/scoring';
-import { TbGripVertical } from "react-icons/tb";
+import { RegistrationRow } from './RegistrationRow';
+import type { RegistrationTableProps } from './types';
 
-interface RegistrationTableProps {
-  registrations: any[];
-  totalCount: number;
-  selection: ReturnType<typeof useSelection<string>>;
-  onEdit: (r: any) => void;
-  onRemove: (regId: string) => void;
-  onUngroup: (regId: string) => void;
-  onDragToGroup: (sourceId: string, targetId: string) => void;
-  /** Hide division badges for sports that do not use divisions (archery). */
-  showDivision?: boolean;
-}
-
-function GripHandle({ registration }: { registration: RegistrationWithShooter }) {
-  const {t} = useTranslation();
-  const { attributes, listeners, setNodeRef } = useDraggable({
-    id: `reg-drag-${registration.id}`,
-    data: { registration },
-  });
-
-  return (
-    <Tooltip content={t('registration.squadGroup')}>
-      <div
-        ref={setNodeRef}
-        {...listeners}
-        {...attributes}
-        className="flex ml-auto items-center justify-center cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-300"
-      >
-        <TbGripVertical className="size-5" />
-      </div>
-    </Tooltip>
-  );
-}
-
-function RegistrationRow({
-  r,
-  idx,
+export default function RegistrationTable({
+  registrations,
+  totalCount,
   selection,
   onEdit,
   onRemove,
   onUngroup,
-  showDivision,
-}: {
-  r: any;
-  idx: number;
-  selection: RegistrationTableProps['selection'];
-  onEdit: (r: any) => void;
-  onRemove: (regId: string) => void;
-  onUngroup: (regId: string) => void;
-  showDivision: boolean;
-}) {
+  onDragToGroup,
+  showDivision = true,
+}: RegistrationTableProps) {
   const { t } = useTranslation();
-  const { categoryLabel, powerFactorLabel } = useConstLabels();
-
-  const { setNodeRef: setDropRef, isOver } = useDroppable({
-    id: `reg-drop-${r.id}`,
-    data: { registration: r },
-  });
-
-  const groupId = r.group_id;
-  const groupBorderColor = groupId ? groupColor(groupId) : undefined;
-
-  return (
-    <TableRow
-      ref={setDropRef}
-      className={`${r.is_dq ? 'bg-red-50 dark:bg-red-900/20' : selection.isSelected(r.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''} ${isOver ? 'ring-2 ring-blue-400' : ''}`}
-    >
-      {/* Checkbox */}
-      <TableCell className="w-4! pr-0">
-        <Checkbox className="size-5 cursor-pointer" checked={selection.isSelected(r.id)} onChange={() => selection.toggle(r.id)} />
-      </TableCell>
-
-      <TableCell className="font-mono text-gray-500">{idx + 1}</TableCell>
-      <TableCell className="font-medium dark:text-white whitespace-nowrap">
-        {r.first_name} {r.last_name}
-      </TableCell>
-      {showDivision && (
-        <TableCell>
-          <Badge color="blue" size="xs">{divisionLabel(r.effective_division)}</Badge>
-        </TableCell>
-      )}
-      <TableCell>
-        <Badge color="gray" size="xs">{categoryLabel(r.effective_category)}</Badge>
-      </TableCell>
-      <TableCell>
-        <Badge color={r.effective_power_factor === 'major' ? 'warning' : 'success'} size="xs">{powerFactorLabel(r.effective_power_factor)}</Badge>
-      </TableCell>
-      <TableCell className="font-mono">{r.squad === null || r.squad === undefined ? '—' : Number(r.squad)}</TableCell>
-      <TableCell>
-        {r.is_dq ? (
-          <Badge color="failure" size="sm">{t('registration.dq')}</Badge>
-        ) : (
-          <Badge color="success" size="sm">{t('registration.active')}</Badge>
-        )}
-      </TableCell>
-      <TableCell>
-        <div className="flex gap-1">
-          <Button size="xs" color="blue" onClick={(e) => { e.stopPropagation(); onEdit(r); }}>{t('common.edit')}</Button>
-          <Button size="xs" color="red" onClick={(e) => { e.stopPropagation(); onRemove(r.id); }}>{t('common.remove')}</Button>
-          
-        </div>
-      </TableCell>
-      <TableCell className="p-0 w-8 min-w-8 relative">
-        <GripHandle registration={r} />
-        <div
-          className="w-1.5 h-full absolute top-0 right-0 cursor-pointer hover:opacity-80 transition-opacity"
-          style={{ backgroundColor: groupBorderColor || 'transparent' }}
-          title={groupBorderColor ? t('registration.ungroup') : undefined}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            if (groupBorderColor) {
-              e.stopPropagation();
-              onUngroup(r.id);
-            }
-          }}
-        />
-      </TableCell>
-    </TableRow>
-  );
-}
-
-export default function RegistrationTable({ registrations, totalCount, selection, onEdit, onRemove, onUngroup, onDragToGroup, showDivision = true }: RegistrationTableProps) {
-  const { t } = useTranslation();
-  const [activeRegistration, setActiveRegistration] = useState<RegistrationWithShooter | null>(null);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
+  const { activeRegistration, sensors, handleDragStart, handleDragEnd } = useRegistrationDnd(onDragToGroup);
 
   if (registrations.length === 0) return null;
-
-  const handleDragStart = (event: any) => {
-    const { active } = event;
-    const reg = active?.data?.current?.registration as RegistrationWithShooter | undefined;
-    if (reg) setActiveRegistration(reg);
-  };
-
-  const handleDragEnd = (event: any) => {
-    const { active, over } = event;
-    setActiveRegistration(null);
-
-    if (!over) return;
-
-    const sourceReg = active.data?.current?.registration;
-    const targetReg = over.data?.current?.registration;
-    if (!sourceReg || !targetReg) return;
-    if (sourceReg.id === targetReg.id) return;
-
-    onDragToGroup(sourceReg.id, targetReg.id);
-  };
 
   return (
     <div className="overflow-x-auto rounded-lg">
@@ -192,11 +54,11 @@ export default function RegistrationTable({ registrations, totalCount, selection
             </TableRow>
           </TableHead>
           <TableBody>
-            {registrations.map((r, idx) => (
+            {registrations.map((registration, index) => (
               <RegistrationRow
-                key={r.id}
-                r={r}
-                idx={idx}
+                key={registration.id}
+                registration={registration}
+                index={index}
                 selection={selection}
                 onEdit={onEdit}
                 onRemove={onRemove}

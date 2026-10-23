@@ -1,44 +1,17 @@
 import { Select, ToggleSwitch } from 'flowbite-react';
 import { InputField } from './InputField';
-import { useTranslation } from 'react-i18next';
-import { CATEGORIES, POWER_FACTORS, getDivisionsForMatch, getDivisionsForOrganization, getGroupedDivisions } from '../../utils/constants';
+import { CATEGORIES, POWER_FACTORS } from '../../utils/constants';
+import { useBulkEditFormFields } from '../../hooks/useBulkEditFormFields';
 
-export interface BulkEditForm {
-  changeDivision: boolean;
-  division: string;
-  changeCategory: boolean;
-  category: string;
-  changePowerFactor: boolean;
-  powerFactor: string;
-  changeTag?: boolean;
-  tag: string;
-  changeSquad?: boolean;
-  squad: string;
-}
+import type { BulkEditFormFieldsProps } from './types';
 
-interface BulkEditFormFieldsProps {
-  form: BulkEditForm;
-  onChange: (form: BulkEditForm) => void;
-  showSquad?: boolean;
-  /** Hide the division field for sports that do not use divisions (archery). */
-  showDivision?: boolean;
-  /** Organization to filter divisions by (e.g. 'IPSC', 'USPSA') */
-  organization?: string;
-  /** Firearm type to filter divisions by (e.g. 'rifle', 'shotgun').
-   *  Takes precedence over `organization` for IPSC Rifle/Shotgun matches. */
-  firearmType?: string;
-}
+export type { BulkEditForm } from './types';
 
 /** Shared form for bulk editing shooters or registrations.
  *  Each field has a "Change this field?" checkbox — only checked fields are included in the update. */
-export default function BulkEditFormFields({ form, onChange, showSquad = false, showDivision = true, organization, firearmType }: BulkEditFormFieldsProps) {
-  const { t } = useTranslation();
-  const divisions = firearmType || organization
-    ? getDivisionsForMatch({ organization, firearm_type: firearmType })
-    : getDivisionsForOrganization(organization);
-  const groupedDivisions = firearmType || organization ? null : getGroupedDivisions();
-
-  const update = (patch: Partial<BulkEditForm>) => onChange({ ...form, ...patch });
+export default function BulkEditFormFields(props: BulkEditFormFieldsProps) {
+  const { form, showSquad = false, showDivision = true } = props;
+  const { t, divisions, groupedDivisions, update } = useBulkEditFormFields(props);
 
   return (
     <div className="space-y-4">

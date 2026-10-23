@@ -22,12 +22,24 @@ Otvorte záložku **Registrácia** pre aktuálnu súťaž.
 - **Pridať existujúceho strelca** — vyhľadajte v globálnej databáze, kliknutím pridajte.
 - **Vytvoriť + registrovať inline** — vytvorte nového strelca a pridajte ho v jednom kroku.
 - **Upraviť registráciu** — prepíšte divíziu, kategóriu alebo power factor len pre túto súťaž.
-- **Hromadná úprava / odstránenie** — označte riadky checkboxmi, potom akciu.
-- **Drag-to-group** — potiahnite riadok na iný riadok, aby ste ich dali do rovnakej skupiny. Užitočné, aby priatelia boli v rovnakom squade.
+- **Hromadná úprava / odstránenie** — označte riadky checkboxmi, potom vykonajte akciu.
+- **Zoskupenie strelcov** — označte dva alebo viac riadkov a kliknite na **Zoskupiť vybrané**, alebo potiahnite jeden riadok na druhý. Užitočné, aby priatelia boli v rovnakom squade.
 
 ![Úprava registrácie](/docs/screenshots/edit-registration-modal.png)
 
 **Prejsť v aplikácii:** [Záložka Registrácia](app-tab:registration)
+
+## Zoskupenie registrovaných strelcov
+
+Skupina je požiadavka na spoločný squad — „car pool" strelcov, ktorí chcú byť spolu. Skupina sama o sebe **neprideľuje** číslo squadu.
+
+- Skupinu vytvoríte tak, že označíte dvoch alebo viac registrovaných strelcov a kliknete na **Zoskupiť vybrané**, alebo potiahnete riadok jedného strelca na riadok druhého.
+- Farebný pás na pravom okraji riadku označuje členstvo v skupine.
+- Strelca zo skupiny odstránite kliknutím na farebný pás v jeho riadku. Viacerých strelcov odstránite označením zoskupených riadkov a kliknutím na **Zrušiť skupiny vybraných**.
+- Dve existujúce skupiny nie je možné spojiť. Najprv jednu z nich zrušte.
+- Ak v modale Squadding priradíte ktoréhokoľvek člena skupiny, celá skupina sa presunie do rovnakého squadu.
+
+Priraďovanie skupín do squad-ov nájdete v [Squady a skupiny](squadding.md).
 
 ## Divízie a kategórie
 

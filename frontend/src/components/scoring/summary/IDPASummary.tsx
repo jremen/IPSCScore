@@ -1,46 +1,12 @@
-import { useMemo } from 'react';
-import { Badge } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useConstLabels } from '../../../hooks/useConstLabels';
-import { divisionLabel } from '../../../utils/constants';
-import { calculateIDPAPreview } from '../../../utils/scoring';
 import { formatTimeDisplay } from '../../../utils/timeFormat';
 import { SummarySheetLayout } from '../shared/SummarySheetLayout';
+import { useIDPASummary } from '../../../hooks/useIDPASummary';
 import type { ScoreSummarySheetProps } from '../ScoreSummarySheet';
 
-export default function IDPASummary({ stage, score, shooterName, shooterDetails, onBack, onApprove }: ScoreSummarySheetProps) {
-  const { t } = useTranslation();
-  const { categoryLabel } = useConstLabels();
-
-  const paperTargets = score.targets.filter(t => t.target_type === 'paper');
-  const steelTargets = score.targets.filter(t => t.target_type === 'steel');
-
-  const totalAlpha = paperTargets.reduce((s, t) => s + t.alpha, 0) + steelTargets.filter(t => t.steel_hit === true).length;
-  const totalCharlie = paperTargets.reduce((s, t) => s + t.charlie, 0);
-  const totalDelta = paperTargets.reduce((s, t) => s + t.delta, 0);
-  const totalMiss = paperTargets.reduce((s, t) => s + t.miss, 0) + steelTargets.filter(t => t.steel_hit === false).length;
-  const totalNS = score.targets.reduce((s, t) => s + t.no_shoot_hits, 0);
-
-  const sd = score.score_data || {};
-  const preview = useMemo(
-    () => calculateIDPAPreview({
-      targets: score.targets.map(t => ({ ...t, hits_per_paper: stage.hits_per_paper })),
-      time: score.time || 0,
-      penalty_pe: Number(sd.penalty_pe) || 0,
-      penalty_hnt: Number(sd.penalty_hnt) || 0,
-      penalty_ftn: Number(sd.penalty_ftn) || 0,
-      penalty_fp: Number(sd.penalty_fp) || 0,
-      penalty_ftdr: Number(sd.penalty_ftdr) || 0,
-    }),
-    [score, stage],
-  );
-
-  const badges = shooterDetails ? (
-    <>
-      <Badge color="blue">{divisionLabel(shooterDetails.division)}</Badge>
-      <Badge color="gray">{categoryLabel(shooterDetails.category)}</Badge>
-    </>
-  ) : undefined;
+export default function IDPASummary(props: ScoreSummarySheetProps) {
+  const { score, shooterName, onBack, onApprove } = props;
+  const { t, totalAlpha, totalCharlie, totalDelta, totalMiss, totalNS, preview, badges } =
+    useIDPASummary(props);
 
   return (
     <SummarySheetLayout shooterName={shooterName} badges={badges} onBack={onBack} onApprove={onApprove}>

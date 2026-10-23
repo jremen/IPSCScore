@@ -1,109 +1,17 @@
-import { Table, TableHead, TableBody, TableRow, TableCell, TableHeadCell, Badge, Progress, theme } from 'flowbite-react';
+import { Table, TableHead, TableBody, TableRow, TableCell, TableHeadCell, Badge, Progress } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { divisionLabel } from '../../utils/constants';
-import { formatHitFactor } from '../../utils/hitFactor';
-import { ScoringProgressEntry } from "../../types/scoring";
-import { twMerge } from "tailwind-merge";
+import {
+  RESULTS_PROGRESS_THEME as PROGRESS_THEME,
+  cellClassName,
+  cellValue,
+  columnHeader,
+  isBoldColumn,
+  isDetailColumn,
+} from '../../utils/resultsTable';
+import type { ResultsTableProps } from './types';
 
-const PROGRESS_THEME = { base: twMerge(theme.progress.base, "relative overflow-visible!") };
-
-export type ColumnKey =
-  | 'position' | 'shooter' | 'division' | 'matches' | 'time'
-  | 'alpha' | 'charlie' | 'delta' | 'miss' | 'noShootHits' | 'procedurals'
-  | 'matchPercent' | 'matchPoints' | 'stagePercent' | 'stagePoints'
-  | 'hitFactor' | 'netPoints' | 'hits' | 'misses'
-  | `ring:${number}`;
-
-interface ResultsTableProps {
-  results: any[];
-  scored?: {scored: ScoringProgressEntry[] | undefined, stagesLength: number};
-  columns: ColumnKey[];
-  showDqBadge?: boolean;
-  onShooterClick?: (registrationId: string) => void;
-}
-
-const DETAIL_COLUMNS = new Set<string>([
-  'division', 'matches', 'time', 'alpha', 'charlie', 'delta', 'miss',
-  'noShootHits', 'procedurals', 'matchPercent', 'matchPoints', 'stagePercent',
-  'stagePoints', 'hitFactor', 'netPoints', 'hits', 'misses',
-]);
-
-export function isDetailColumn(col: ColumnKey): boolean {
-  return DETAIL_COLUMNS.has(col) || col.startsWith('ring:');
-}
-
-export function columnHeader(col: ColumnKey, t: (key: string, opts?: any) => string): string {
-  if (col.startsWith('ring:')) {
-    const value = Number(col.slice('ring:'.length));
-    if (value === 11) return 'X';
-    if (value === 0) return t('results.ringMiss');
-    return String(value);
-  }
-
-  const map: Record<string, string> = {
-    position: t('results.position'),
-    shooter: t('results.shooter'),
-    division: t('results.division'),
-    matches: t('cups.colMatches'),
-    time: t('results.time', { defaultValue: 'Time' }),
-    alpha: t('results.alpha'),
-    charlie: t('results.charlie'),
-    delta: t('results.delta'),
-    miss: t('results.miss'),
-    noShootHits: t('results.noShootHits'),
-    procedurals: t('results.proceduralsHeader'),
-    matchPercent: t('results.matchPercent'),
-    matchPoints: t('results.points'),
-    stagePercent: t('results.stagePercent'),
-    stagePoints: t('results.points'),
-    hitFactor: 'HF',
-    netPoints: t('results.netPoints'),
-    hits: t('results.hits'),
-    misses: t('results.misses'),
-  };
-  return map[col] ?? '';
-}
-
-export function cellValue(col: ColumnKey, r: any): string {
-  if (col.startsWith('ring:')) {
-    const value = col.slice('ring:'.length);
-    return String(r.ring_counts?.[value] ?? 0);
-  }
-
-  switch (col) {
-    case 'position': return String(r.position);
-    case 'shooter': return `${r.first_name} ${r.last_name}`;
-    case 'division': return divisionLabel(r.division);
-    case 'time': return r.time != null ? Number(r.time).toFixed(2) : '—';
-    case 'alpha': return String(r.alpha ?? 0);
-    case 'charlie': return String(r.charlie ?? 0);
-    case 'delta': return String(r.delta ?? 0);
-    case 'miss': return String(r.miss ?? 0);
-    case 'noShootHits': return String(r.no_shoot ?? 0);
-    case 'procedurals': return String(r.procedurals ?? 0);
-    case 'matchPercent': return `${r.match_percent?.toFixed(2)}%`;
-    case 'matchPoints': return r.match_points?.toFixed(2);
-    case 'stagePercent': return `${r.stage_percent?.toFixed(2)}%`;
-    case 'stagePoints': return r.stage_points?.toFixed(2);
-    case 'hitFactor': return formatHitFactor(r.hit_factor, '—');
-    case 'netPoints': return r.net_points?.toFixed(2);
-    case 'matches': return `${r.matches_count ?? 0}/${r.matches_required ?? 0}`;
-    case 'hits': return String(r.hits ?? 0);
-    case 'misses': return String(r.misses ?? 0);
-    default: return '';
-  }
-}
-
-function isBoldColumn(col: ColumnKey): boolean {
-  return col === 'matchPoints' || col === 'stagePoints';
-}
-
-export function cellClassName(col: ColumnKey): string {
-  const base = col !== 'shooter' && col !== 'division' ? 'font-mono' : '';
-  const bold = isBoldColumn(col) ? 'font-bold' : '';
-  const shooter = col === 'shooter' ? 'font-medium dark:text-white whitespace-nowrap' : '';
-  return [base, bold, shooter].filter(Boolean).join(' ');
-}
+export type { ColumnKey } from '../../utils/resultsTable';
+export { cellValue, columnHeader } from '../../utils/resultsTable';
 
 /** Shared results table — responsive: desktop table, mobile card layout */
 export default function ResultsTable({ results, scored, columns, showDqBadge = true, onShooterClick }: ResultsTableProps) {

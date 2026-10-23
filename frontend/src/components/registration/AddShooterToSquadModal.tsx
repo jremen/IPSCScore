@@ -1,40 +1,16 @@
-import { useState, useMemo } from 'react';
 import { Button, Modal, ModalHeader, ModalBody, TextInput, Badge, ModalFooter } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { useEscClose } from '../../hooks/useEscClose';
-import type { RegistrationWithShooter } from '../../types/scoring';
-
-interface AddShooterToSquadModalProps {
-  show: boolean;
-  onClose: () => void;
-  targetSquad: number;
-  registrations: RegistrationWithShooter[];
-  onAdd: (registrationId: string) => void;
-}
+import { useAddShooterToSquadModal } from '../../hooks/useAddShooterToSquadModal';
+import type { AddShooterToSquadModalProps } from './types';
 
 export default function AddShooterToSquadModal({ show, onClose, targetSquad, registrations, onAdd }: AddShooterToSquadModalProps) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState('');
-
-  // Filter: all shooters NOT already in this squad
-  const available = useMemo(() => {
-    return registrations.filter((r) => r.squad !== targetSquad);
-  }, [registrations, targetSquad]);
-
-  const filtered = useMemo(() => {
-    if (!query) return available;
-    const q = query.toLowerCase();
-    return available.filter((r) => {
-      const name = `${r.first_name} ${r.last_name}`.toLowerCase();
-      return name.includes(q);
-    });
-  }, [available, query]);
-
-  const handleClose = () => {
-    setQuery('');
-    onClose();
-  };
-  useEscClose(handleClose);
+  const { query, setQuery, filtered, handleClose, handleAdd } = useAddShooterToSquadModal({
+    targetSquad,
+    registrations,
+    onAdd,
+    onClose,
+  });
 
   return (
     <Modal show={show} onClose={handleClose} size="lg">
@@ -48,21 +24,20 @@ export default function AddShooterToSquadModal({ show, onClose, targetSquad, reg
         />
         <div className="max-h-100 overflow-y-auto space-y-1">
           {filtered.length > 0 ? (
-            filtered.map((r) => (
+            filtered.map((registration) => (
               <Button
-                key={r.id}
+                key={registration.id}
                 size="xs"
                 color="light"
-                onClick={() => { onAdd(r.id); handleClose(); }}
+                onClick={() => handleAdd(registration.id)}
                 className="w-full text-left justify-start"
               >
                 <div className="font-medium text-sm dark:text-white">
-                  {r.first_name} {r.last_name}
+                  {registration.first_name} {registration.last_name}
                 </div>
                 <div className="flex ml-auto gap-1 mt-0.5">
-                  
-                  {r.squad !== null && r.squad !== undefined && (
-                    <Badge color="purple" size="xs">{t('squadding.squadN', { number: r.squad })}</Badge>
+                  {registration.squad !== null && registration.squad !== undefined && (
+                    <Badge color="purple" size="xs">{t('squadding.squadN', { number: registration.squad })}</Badge>
                   )}
                 </div>
               </Button>

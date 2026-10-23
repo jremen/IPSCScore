@@ -12,11 +12,26 @@ The Matches tab lists every match on this device. The currently active match is 
 
 - Set or unset a match as the current one
 - Open the match detail view
-- Export a match as JSON
-- Import a match from JSON
+- Export a match as IPSCScore JSON or Practiscore `.psc`
+- Import a match from JSON, WinMSS, or Practiscore
+- Select several matches and create a Cup from them
 - Delete matches
 
 **To do this in the app:** [Go to Matches](app-tab:matches)
+
+## Importing and exporting matches
+
+Use **Import Match** at the top of the Matches tab to import:
+
+- IPSCScore `.match.json`
+- WinMSS `.mdb` / `.accdb`
+- Practiscore `.psc`
+
+WinMSS and Practiscore import need the browser/desktop backend. The standalone Android/iOS app shows only the IPSCScore JSON option.
+
+Use the export button on a match row to choose IPSCScore `.match.json` or, in the browser/desktop app, Practiscore `.psc`.
+
+To create a Cup from several matches, select them with the checkboxes and choose **Generate Cup** in the bulk action bar. See [Cups](cups.md).
 
 ## Creating a match
 

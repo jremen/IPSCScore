@@ -1,21 +1,7 @@
 import { Badge } from 'flowbite-react';
 import { InputField } from '../../shared/InputField';
-import type { TargetScore } from '../../../types/scoring';
 import { useTranslation } from "react-i18next";
-
-interface DesktopSteelTargetsProps {
-  steelTargets: TargetScore[];
-  steelMisses: number;
-  onSteelMissChange: (newMisses: number) => void;
-  disabled?: boolean;
-  // No-shoot on steel
-  steelNSHits?: number;
-  onSteelNSChange?: (delta: number) => void;
-  // NPM props
-  npmCount?: number;
-  npmHits?: number;
-  onNpmHitChange?: (newHits: number) => void;
-}
+import type { DesktopSteelTargetsProps } from '../types';
 
 export default function DesktopSteelTargets({
   steelTargets,

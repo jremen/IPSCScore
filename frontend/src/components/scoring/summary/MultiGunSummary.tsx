@@ -1,27 +1,11 @@
-import { useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { calculateMultiGunPreview } from '../../../utils/scoring';
 import { formatTimeDisplay } from '../../../utils/timeFormat';
 import { SummarySheetLayout } from '../shared/SummarySheetLayout';
+import { useMultiGunSummary } from '../../../hooks/useMultiGunSummary';
 import type { ScoreSummarySheetProps } from '../ScoreSummarySheet';
 
-export default function MultiGunSummary({ score, shooterName, onBack, onApprove }: ScoreSummarySheetProps) {
-  const { t } = useTranslation();
-
-  const sd = score.score_data || {};
-  const neutralized = score.targets.filter(t => t.target_data?.neutralized === true).length;
-  const totalTargets = score.targets.length;
-
-  const preview = useMemo(
-    () => calculateMultiGunPreview({
-      time: score.time || 0,
-      penalty_ftn_sec: Number(sd.penalty_ftn_sec) || 0,
-      penalty_miss_sec: Number(sd.penalty_miss_sec) || 0,
-      penalty_no_shoot_sec: Number(sd.penalty_no_shoot_sec) || 0,
-      penalty_procedural_sec: Number(sd.penalty_procedural_sec) || 0,
-    }),
-    [score, sd],
-  );
+export default function MultiGunSummary(props: ScoreSummarySheetProps) {
+  const { score, shooterName, onBack, onApprove } = props;
+  const { t, neutralized, totalTargets, preview } = useMultiGunSummary(props);
 
   return (
     <SummarySheetLayout shooterName={shooterName} onBack={onBack} onApprove={onApprove}>

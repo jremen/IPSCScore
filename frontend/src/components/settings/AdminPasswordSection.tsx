@@ -1,48 +1,19 @@
-import { useState } from 'react';
 import { Button, Label, TextInput, Alert } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '../../stores/authStore';
-import { api } from '../../services/api';
+import { useAdminPasswordSection } from '../../hooks/useAdminPasswordSection';
 
 export default function AdminPasswordSection() {
-  const { t } = useTranslation();
-  const adminToken = useAuthStore((s) => s.adminToken);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  const handleChangePassword = async () => {
-    setMessage(null);
-
-    if (newPassword !== confirmPassword) {
-      setMessage({ type: 'error', text: t('auth.passwordMismatch') });
-      return;
-    }
-
-    if (newPassword.length < 10) {
-      setMessage({ type: 'error', text: t('auth.passwordTooShort') });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const result = await api.auth.changeAdminPassword(currentPassword, newPassword, adminToken!);
-      if (result.success) {
-        setMessage({ type: 'success', text: t('auth.passwordChanged') });
-        setCurrentPassword('');
-        setNewPassword('');
-        setConfirmPassword('');
-      } else {
-        setMessage({ type: 'error', text: result.error || t('auth.incorrectPassword') });
-      }
-    } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || t('auth.incorrectPassword') });
-    } finally {
-      setSaving(false);
-    }
-  };
+  const {
+    t,
+    currentPassword,
+    newPassword,
+    confirmPassword,
+    saving,
+    message,
+    setCurrentPassword,
+    setNewPassword,
+    setConfirmPassword,
+    handleChangePassword,
+  } = useAdminPasswordSection();
 
   return (
     <div>
@@ -56,7 +27,7 @@ export default function AdminPasswordSection() {
             id="current-password"
             type="password"
             value={currentPassword}
-            onChange={(e) => setCurrentPassword(e.target.value)}
+            onChange={(event) => setCurrentPassword(event.target.value)}
             required
           />
         </div>
@@ -68,7 +39,7 @@ export default function AdminPasswordSection() {
             id="new-password"
             type="password"
             value={newPassword}
-            onChange={(e) => setNewPassword(e.target.value)}
+            onChange={(event) => setNewPassword(event.target.value)}
             required
           />
         </div>
@@ -80,7 +51,7 @@ export default function AdminPasswordSection() {
             id="confirm-password"
             type="password"
             value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
+            onChange={(event) => setConfirmPassword(event.target.value)}
             required
           />
         </div>

@@ -1,12 +1,5 @@
 import { Checkbox } from 'flowbite-react';
-
-interface SelectAllCheckboxProps {
-  allSelected: boolean;
-  someSelected: boolean;
-  onToggle: () => void;
-  selectedCount: number;
-  totalCount: number;
-}
+import type { SelectAllCheckboxProps } from './types';
 
 /** Checkbox with indeterminate state for table header select-all. */
 export default function SelectAllCheckbox({ allSelected, someSelected, onToggle, selectedCount, totalCount }: SelectAllCheckboxProps) {

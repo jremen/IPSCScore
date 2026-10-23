@@ -1,8 +1,9 @@
 import { Label } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
+import type { DnfToggleProps } from '../types';
 
 /** DNF toggle button used in all scoring sheets */
-export default function DnfToggle({ isDnf, onToggle, disabled = false }: { isDnf: boolean; onToggle: () => void; disabled?: boolean }) {
+export default function DnfToggle({ isDnf, onToggle, disabled = false }: DnfToggleProps) {
   const { t } = useTranslation();
 
   return (

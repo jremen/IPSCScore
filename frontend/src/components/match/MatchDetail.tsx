@@ -1,20 +1,9 @@
-import { useEffect } from 'react';
 import { Button, Badge, Card } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useMatchStore } from '../../stores/matchStore';
-import { useUIStore } from '../../stores/uiStore';
 import { formatDate } from '../../utils/constants';
+import { useMatchDetail } from '../../hooks/useMatchDetail';
 
 export default function MatchDetail() {
-  const currentMatch = useMatchStore((s) => s.currentMatch);
-  const fetchMatch = useMatchStore((s) => s.fetchMatch);
-  const activeMatchId = useUIStore((s) => s.activeMatchId);
-  const setActiveMatch = useUIStore((s) => s.setActiveMatch);
-  const { t } = useTranslation();
-
-  useEffect(() => {
-    if (activeMatchId) fetchMatch(activeMatchId);
-  }, [activeMatchId, fetchMatch]);
+  const { t, currentMatch, goBack } = useMatchDetail();
 
   if (!currentMatch) return <p className="p-4 text-gray-500">{t('common.loading')}</p>;
 
@@ -23,7 +12,7 @@ export default function MatchDetail() {
   return (
     <div className="p-4 max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-4">
-        <Button size="sm" color="gray" onClick={() => setActiveMatch(null)}>{t('matchDetail.back')}</Button>
+        <Button size="sm" color="gray" onClick={goBack}>{t('matchDetail.back')}</Button>
         <h2 className="text-xl font-bold dark:text-white">{currentMatch.name}</h2>
         <Badge color={currentMatch.organization === 'IPSC' ? 'info' : 'purple'}>{currentMatch.organization}</Badge>
         <Badge color="gray">{currentMatch.firearm_type}</Badge>
@@ -32,7 +21,6 @@ export default function MatchDetail() {
 
       <p className="text-sm text-gray-500 mb-4">{formatDate(currentMatch.date)} • {currentMatch.shooter_count} {t('matches.shooters').toLowerCase()}</p>
 
-      {/* Match Summary */}
       <Card className="mb-4">
         <h3 className="font-semibold mb-2 dark:text-white">{t('matchDetail.summary')}</h3>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 dark:text-white text-xs text-center">
@@ -43,7 +31,6 @@ export default function MatchDetail() {
         </div>
       </Card>
 
-      {/* Stages list */}
       <h3 className="font-semibold mb-2 dark:text-white">{t('stages.title')} ({currentMatch.stages.length})</h3>
       <div className="space-y-2">
         {currentMatch.stages.map((stage) => (

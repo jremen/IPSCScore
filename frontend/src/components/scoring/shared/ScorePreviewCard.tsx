@@ -1,9 +1,8 @@
 import { useTranslation } from 'react-i18next';
+import type { ScorePreviewCardProps } from '../types';
 
 /** Live score preview card showing raw points, penalties, net points, and hit factor */
-export default function ScorePreviewCard({ preview }: {
-  preview: { raw_points: number; penalty_points: number; net_points: number; hit_factor: number };
-}) {
+export default function ScorePreviewCard({ preview }: ScorePreviewCardProps) {
   const { t } = useTranslation();
 
   return (

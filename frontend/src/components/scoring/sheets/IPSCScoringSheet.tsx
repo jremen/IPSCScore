@@ -10,15 +10,9 @@ import PaperTargetsTable from './IPSCPaperTargets';
 import DesktopPaperTargets from './DesktopPaperTargets';
 import DesktopSteelTargets from './DesktopSteelTargets';
 import NoShootSection from './IPSCNoShootTargets';
-import type { Stage } from '../../../types/stage';
-import type { ScoreInput } from '../../../types/scoring';
+import type { ScoringSheetProps } from '../types';
 
-interface Props {
-  stage: Stage;
-  score: ScoreInput;
-}
-
-export default function IPSCScoringSheet({ stage, score }: Props) {
+export default function IPSCScoringSheet({ stage, score }: ScoringSheetProps) {
   const { t, i18n } = useTranslation();
   const { isDesktop } = useDeviceContext();
   const alerts = useScoringStore((s) => s.alerts);
@@ -33,23 +27,11 @@ export default function IPSCScoringSheet({ stage, score }: Props) {
     handlePaperTotalsChange, handlePaperNSClick, handleResetTarget, handleSteelMissChange,
     handleSteelNSClick, handleResetSteel, steelHits, handleSteelHitIncrement, handleSteelHitDecrement,
     handleSteelMissIncrement, handleSteelMissDecrement,
-    handleNpmHitIncrement, handleNpmHitDecrement, handleResetNpm,
+    handleNpmHitIncrement, handleNpmHitDecrement, handleNpmHitChange, handleResetNpm,
     handleNoShootChange, handleTimeChange, handleResetAll, handleProceduralChange,
     handlePenaltyFieldChange, handleDnfToggle, preview, isVirginia, isFixedTime,
-    showExtraPenalties, hasSidebar, hpp,
+    showExtraPenalties, hasSidebar, hasNoShootTargets, hasAnyTargets, subtitle, hpp,
   } = useIPSCScoring(stage, score);
-
-  const hasNoShootTargets = stage.no_shoot_targets > 0;
-  const hasAnyTargets =
-    paperTargets.length > 0 || steelTargets.length > 0 || npmTargets.length > 0 || noShootTargets.length > 0;
-
-  // Subtitle showing stage composition
-  const subtitleParts = [];
-  if (stage.paper_targets > 0) subtitleParts.push(t('scoring.paperTargetsShort', { count: stage.paper_targets, hpp }));
-  if (stage.steel_targets > 0) subtitleParts.push(`${stage.steel_targets} ${t('scoring.steelTargets')}`);
-  if (hasNoShootTargets) subtitleParts.push(t('scoring.noShootTargets'));
-  if (stage.npm_targets > 0) subtitleParts.push(`${stage.npm_targets} ${t('scoring.npmTargets')}`);
-  const subtitle = subtitleParts.join(' • ');
 
   return (
     <div className="p-2 sm:p-4 max-w-7xl mx-auto lg:grid grid-cols-2 gap-6">
@@ -143,16 +125,7 @@ export default function IPSCScoringSheet({ stage, score }: Props) {
                   onSteelNSChange={handleSteelNSClick}
                   npmCount={npmTargets.length}
                   npmHits={npmHits}
-                  onNpmHitChange={(newHits: number) => {
-                    // Set exactly N targets as hit, rest as null
-                    const sortedNpm = [...npmTargets].sort((a, b) => a.target_index - b.target_index);
-                    const hitSet = new Set(sortedNpm.slice(0, newHits).map(t => t.target_index));
-                    const newTargets = score.targets.map(t => {
-                      if (t.target_type !== 'npm') return t;
-                      return { ...t, steel_hit: hitSet.has(t.target_index) ? true : null };
-                    });
-                    useScoringStore.getState().setScore({ ...score, targets: newTargets });
-                  }}
+                  onNpmHitChange={handleNpmHitChange}
                 />
               )}
               {/* No-Shoot section: show standalone only when no paper targets and no steel targets */}

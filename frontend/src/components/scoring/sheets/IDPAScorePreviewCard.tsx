@@ -1,11 +1,8 @@
 import { useTranslation } from 'react-i18next';
 
-interface Props {
-  raw_points: number;
-  total_time: number;
-}
+import type { IDPAScorePreviewCardProps } from '../types';
 
-export default function IDPAScorePreviewCard({ raw_points, total_time }: Props) {
+export default function IDPAScorePreviewCard({ raw_points, total_time }: IDPAScorePreviewCardProps) {
   const { t } = useTranslation();
 
   return (

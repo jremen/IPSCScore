@@ -1,3 +1,5 @@
+import type { PenaltyStepperProps } from '../types';
+
 /** Stepper UI for penalty counts — + / − buttons around a value */
 export default function PenaltyStepper({
   value,
@@ -6,14 +8,7 @@ export default function PenaltyStepper({
   size = 'md',
   color = 'orange',
   disabled = false,
-}: {
-  value: number;
-  onDecrement: () => void;
-  onIncrement: () => void;
-  size?: 'sm' | 'md' | 'lg';
-  color?: 'orange' | 'purple' | 'red';
-  disabled?: boolean;
-}) {
+}: PenaltyStepperProps) {
   const sizeClasses = {
     sm: { wrapper: 'gap-1', button: 'text-sm', value: 'w-8 text-sm', minusBg: '', plusBg: '' },
     md: { wrapper: 'gap-2', button: 'text-lg', value: 'w-10 text-2xl', minusBg: '', plusBg: '' },

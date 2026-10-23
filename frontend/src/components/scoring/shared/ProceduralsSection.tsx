@@ -1,20 +1,7 @@
 import { Label } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import PenaltyStepper from './PenaltyStepper';
-
-interface ProceduralsSectionProps {
-  proceduralCount: number;
-  onProceduralChange: (delta: number) => void;
-  showExtraPenalties: boolean;
-  isVirginia: boolean;
-  isFixedTime: boolean;
-  extraShotCount: number;
-  extraHitCount: number;
-  stackingCount: number;
-  overtimeShotCount: number;
-  onPenaltyFieldChange: (key: 'extra_shot_count' | 'extra_hit_count' | 'stacking_count' | 'overtime_shot_count', delta: number) => void;
-  disabled?: boolean;
-}
+import type { ProceduralsSectionProps } from '../types';
 
 export default function ProceduralsSection({
   proceduralCount,

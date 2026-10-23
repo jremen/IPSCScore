@@ -1,55 +1,24 @@
-import { useEffect, useState } from 'react';
-import { Button, Card, Badge, Alert } from 'flowbite-react';
+import { Alert, Button } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { useStageStore } from '../../stores/stageStore';
-import { useUIStore } from '../../stores/uiStore';
-import { SCORING_TYPES, translateItem } from '../../utils/constants';
-import StageImageUpload from './StageImageUpload';
 import StageFormModal from './StageFormModal';
 import PrintScoreSheetButton from './PrintScoreSheetButton';
-import type { Stage } from '../../types/stage';
-import { useTabMenuAction } from '../../hooks/useTabMenuAction';
-
-function getScoringTypeLabel(type: string, t: (key: string) => string): string {
-  const found = SCORING_TYPES.find(s => s.value === type);
-  if (!found) return type;
-  return translateItem(t, found);
-}
+import StageCard from './StageCard';
+import { useStageListView } from '../../hooks/useStageListView';
 
 export default function StageList() {
-  const stages = useStageStore((s) => s.stages);
-  const loading = useStageStore((s) => s.loading);
-  const error = useStageStore((s) => s.error);
-  const fetchStages = useStageStore((s) => s.fetchStages);
-  const deleteStage = useStageStore((s) => s.deleteStage);
-  const activeMatchId = useUIStore((s) => s.activeMatchId);
-  const addToast = useUIStore((s) => s.addToast);
   const { t } = useTranslation();
-  const [showCreate, setShowCreate] = useState(false);
-  const [editStage, setEditStage] = useState<Stage | null>(null);
-
-  useEffect(() => {
-    if (activeMatchId) fetchStages(activeMatchId);
-  }, [activeMatchId, fetchStages]);
-
-  useTabMenuAction('new-stage', () => {
-    if (activeMatchId) setShowCreate(true);
-  });
-
-  const handleDelete = async (stageId: string) => {
-    if (!activeMatchId) return;
-    await deleteStage(stageId);
-    addToast(t('stages.deleted'), 'success');
-  };
-
-  const openEdit = (stage: any) => {
-    setEditStage(stage);
-  };
-
-  const handleCloseModal = () => {
-    setShowCreate(false);
-    setEditStage(null);
-  };
+  const {
+    stages,
+    loading,
+    error,
+    activeMatchId,
+    showCreate,
+    setShowCreate,
+    editStage,
+    setEditStage,
+    handleDelete,
+    handleCloseModal,
+  } = useStageListView();
 
   if (!activeMatchId) {
     return <p className="p-4 text-gray-500 text-center">{t('stages.noMatch')}</p>;
@@ -68,51 +37,8 @@ export default function StageList() {
       {loading && <p className="text-gray-500">{t('common.loading')}</p>}
 
       <div className="space-y-3">
-        {stages.map((stage: any) => (
-          <Card key={stage.id}>
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono text-blue-600 text-lg">#{stage.stage_number}</span>
-                  <span className="font-semibold dark:text-white">{stage.name}</span>
-                  <Badge color="indigo">{getScoringTypeLabel(stage.scoring_type, t)}</Badge>
-                  {stage.par_time && <Badge color="yellow">{t('stages.parTimeBadge', { seconds: stage.par_time })}</Badge>}
-                </div>
-                <div className="text-sm text-gray-500 dark:text-gray-200 space-x-3">
-                  {stage.paper_targets > 0 && <span>{t('stages.paper')}: {stage.paper_targets}</span>}
-                  {stage.steel_targets > 0 && <span>{t('stages.steel')}: {stage.steel_targets}</span>}
-                  {stage.no_shoot_targets > 0 && <span>{t('stages.noShoot')}: {t('common.yes')}</span>}
-                  {stage.npm_targets > 0 && <span>NPM: {stage.npm_targets}</span>}
-                  {stage.hits_per_paper > 0 && stage.paper_targets > 0 && <span>{t('stages.hitsPerPaperShort')}: {stage.hits_per_paper}</span>}
-                  <span>{t('stages.minRoundsShort')}: {stage.min_rounds}</span>
-                  <span>{t('stages.maxPointsShort')}: {stage.max_points}</span>
-                  {stage.config && Object.keys(stage.config).length > 0 && (
-                    <span className="text-xs text-gray-400">
-                      {stage.config.number_of_strings && `${t('stages.configNumberOfStrings')}: ${stage.config.number_of_strings}`}
-                      {stage.config.num_targets && ` ${t('stages.configNumTargets')}: ${stage.config.num_targets}`}
-                      {stage.config.shots_per_string && ` • ${stage.config.shots_per_string}${t('stages.configShotsSuffix')}`}
-                      {stage.config.fire_type && ` • ${stage.config.fire_type}${t('stages.configFireSuffix')}`}
-                      {stage.config.variant && ` • ${stage.config.variant}`}
-                      {stage.config.arrows_per_end && ` • ${stage.config.arrows_per_end}${t('stages.configArrowsSuffix')}`}
-                      {stage.config.point_value && ` • ${stage.config.point_value}${t('stages.configPointsSuffix')}`}
-                    </span>
-                  )}
-                </div>
-                {stage.image_path && (
-                  <img
-                    src={`/api/uploads/${stage.image_path.split('/').pop()}`}
-                    alt={`Stage ${stage.stage_number} plan`}
-                    className="mt-2 max-h-40 rounded"
-                  />
-                )}
-              </div>
-              <div className="flex gap-2 ml-2">
-                <StageImageUpload stageId={stage.id} />
-                <Button size="xs" color="blue" onClick={() => openEdit(stage)}>{t('common.edit')}</Button>
-                <Button size="xs" color="red" onClick={() => handleDelete(stage.id)}>{t('common.delete')}</Button>
-              </div>
-            </div>
-          </Card>
+        {stages.map((stage) => (
+          <StageCard key={stage.id} stage={stage} onEdit={setEditStage} onDelete={handleDelete} />
         ))}
       </div>
 
@@ -124,8 +50,8 @@ export default function StageList() {
         <Alert color="warning" className="mt-4">{t('offline.noCachedStages')}</Alert>
       )}
 
-      <StageFormModal show={showCreate} onClose={handleCloseModal} matchId={activeMatchId!} />
-      <StageFormModal show={!!editStage} onClose={handleCloseModal} editStage={editStage} matchId={activeMatchId!} />
+      <StageFormModal show={showCreate} onClose={handleCloseModal} matchId={activeMatchId} />
+      <StageFormModal show={Boolean(editStage)} onClose={handleCloseModal} editStage={editStage} matchId={activeMatchId} />
     </div>
   );
 }

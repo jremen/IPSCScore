@@ -2,6 +2,18 @@ appId: com.ipscscore.app
 productName: IPSCScore
 copyright: Copyright © 2026 IPSCScore
 
+# ── Linux packaging toolset ──────────────────────────────────────────────
+# electron-builder's legacy AppImage toolset (0.0.0, the v26 default) embeds a
+# FUSE2 runtime whose ARM64 binary links the unversioned `libz.so`. Distributions
+# only ship `libz.so.1` unless the user installs the zlib development package, so
+# ARM64 AppImages failed at startup with:
+#   error while loading shared libraries: libz.so
+# The static 1.0.3 runtime is statically linked and needs no host libz. Mounting
+# an AppImage still requires FUSE2 on the target system, as with any AppImage. See
+# https://github.com/electron-userland/electron-builder/issues/7835
+toolsets:
+  appimage: "1.0.3"
+
 directories:
   output: ../dist-electron
   buildResources: resources
@@ -35,12 +47,14 @@ afterPack: scripts/afterPack.js
 # other — which the release workflow (two separate Windows jobs, one per arch)
 # would then publish only once.
 mac:
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ${productName}-${version}_Mac_${arch}.${ext}
   target:
     - target: dmg
       arch:
         - arm64
+        - x64
   icon: resources/icon.icns
+  darkModeSupport: true
   category: public.app-category.utilities
   # Hardened runtime needed for macOS distribution
   # hardenedRuntime: true
@@ -54,7 +68,7 @@ mac:
     - "/Contents/Resources/pg/share/"
 
 win:
-  artifactName: ${productName} Setup ${version}-${arch}.${ext}
+  artifactName: ${productName}-${version}_Windows_${arch}.${ext}
   target:
     - target: nsis
       arch:
@@ -66,8 +80,13 @@ nsis:
   include: resources/installer/vcredist.nsh
 
 linux:
-  artifactName: ${productName}-${version}-${arch}.${ext}
+  artifactName: ${productName}-${version}_Linux_${arch}.${ext}
   target:
     - target: AppImage
-  icon: resources/icon.png
+  # Install a full size-named PNG set into the AppImage's hicolor theme so desktop
+  # environments have a proper launcher icon at every requested size.
+  icon: resources/icons
   category: Utility
+  # Keep the installed .desktop filename aligned with Electron's app_id / WM_CLASS
+  # (derived from package.json "desktopName") and StartupWMClass.
+  syncDesktopName: true

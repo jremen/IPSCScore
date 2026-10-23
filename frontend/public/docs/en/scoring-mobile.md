@@ -24,7 +24,7 @@ The header shows a small offline indicator with the count of pending saves.
 
 ## Summary view (remote scorers)
 
-After entering all fields, mobile scorers see a summary card showing the inputs and the calculated score. They tap **Confirm** to submit. The match host then approves or rejects.
+After entering all fields, mobile scorers see a summary card showing the inputs and the calculated score. They tap **Approve** to submit. If a host already has a different score for the same shooter and stage, the server keeps the host score and rejects the stale submission.
 
 ![Mobile summary view](/docs/screenshots/scoring-mobile-summary.png)
 

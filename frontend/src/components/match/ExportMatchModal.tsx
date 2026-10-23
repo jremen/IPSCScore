@@ -1,33 +1,9 @@
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useMatchExport } from '../../hooks/useMatchExport';
-import { useEscClose } from '../../hooks/useEscClose';
-import { isLocalRuntime } from '../../services/data/platform';
-
-interface ExportMatchModalProps {
-  show: boolean;
-  onClose: () => void;
-  matchId: string;
-  matchName: string;
-}
+import { useExportMatchModal } from '../../hooks/useExportMatchModal';
+import type { ExportMatchModalProps } from './types';
 
 export default function ExportMatchModal({ show, onClose, matchId, matchName }: ExportMatchModalProps) {
-  const { t } = useTranslation();
-  const { exporting, handleExport, handleExportPsc } = useMatchExport();
-  // The PSC exporter is server-side; the standalone mobile builds only produce
-  // the native IPSCScore JSON format.
-  const local = isLocalRuntime();
-  useEscClose(onClose);
-
-  const handleNative = () => {
-    handleExport(matchId, matchName);
-    onClose();
-  };
-
-  const handlePsc = () => {
-    handleExportPsc(matchId, matchName);
-    onClose();
-  };
+  const { t, exporting, local, exportNative, exportPsc } = useExportMatchModal(matchId, matchName, onClose);
 
   return (
     <Modal show={show} onClose={onClose} size="md" className="dark:text-white">
@@ -37,7 +13,7 @@ export default function ExportMatchModal({ show, onClose, matchId, matchName }: 
         <div className="grid grid-cols-1 gap-3">
           <Button
             color="light"
-            onClick={handleNative}
+            onClick={exportNative}
             disabled={exporting}
             className="justify-start px-4! py-6!"
           >
@@ -51,7 +27,7 @@ export default function ExportMatchModal({ show, onClose, matchId, matchName }: 
           {!local && (
             <Button
               color="light"
-              onClick={handlePsc}
+              onClick={exportPsc}
               disabled={exporting}
               className="justify-start px-4! py-6!"
             >

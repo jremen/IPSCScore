@@ -8,7 +8,7 @@ Scoring is the act of entering a shooter's hits and time for a stage. The app sh
 2. **Pick a shooter** — the shooter list on the left, or the **Next** / **Prev** buttons in the header.
 3. **Enter hits** — paper / steel / penalty target / NPM depending on the scoring type.
 4. **Enter time** — bottom of the sheet (or top, on mobile).
-5. **Confirm and save** — admins save immediately. Remote scorers get a summary view to review before submitting.
+5. **Confirm and save** — admins save immediately. Remote scorers review the summary and tap **Approve** to submit.
 
 A green check mark next to a shooter means they are scored for the active stage.
 

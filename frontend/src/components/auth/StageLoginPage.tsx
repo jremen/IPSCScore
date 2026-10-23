@@ -1,93 +1,25 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, TextInput, Button, Alert } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { getOrCreateDeviceId, useAuthStore } from '../../stores/authStore';
-import { isLocalRuntime } from '../../services/data/platform';
-import { isOnlineSync } from '../../services/connectivity';
 import LanguageSelector from '../settings/LanguageSelector';
+import { useStageLoginPage } from '../../hooks/useStageLoginPage';
 
 export default function StageLoginPage() {
-  const { t } = useTranslation();
-  const loginWithTrustToken = useAuthStore((s) => s.loginWithTrustToken);
-  const autoLogin = useAuthStore((s) => s.autoLogin);
-  const loading = useAuthStore((s) => s.loading);
-  const error = useAuthStore((s) => s.error);
-  const isLocalNetwork = useAuthStore((s) => s.isLocalNetwork);
-  const pendingApproval = useAuthStore((s) => s.pendingApproval);
-  const [pasteMode, setPasteMode] = useState(false);
-  const [pastedUrl, setPastedUrl] = useState('');
-  const [pasteError, setPasteError] = useState('');
-  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
-  const deviceID = getOrCreateDeviceId();
-
-  const isStandalone = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(display-mode: standalone)').matches ||
-      // @ts-ignore — iOS Safari standalone
-      (window.navigator.standalone === true);
-  }, []);
-
-  const isOffline = !isOnlineSync();
-
-  // Auto-redeem ?trustToken=... from URL query string
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const trustToken = params.get('trustToken');
-    if (!trustToken) return;
-
-    (async () => {
-      const ok = await loginWithTrustToken(trustToken);
-      if (ok) {
-        // Don't strip ?trustToken= — keep it visible so user can copy/paste if needed
-      }
-    })();
-  }, [loginWithTrustToken]);
-
-  // Check for existing cookie-based session on mount (PWA flow: user scanned in Safari, now opens PWA)
-  useEffect(() => {
-    // The standalone mobile builds have no backend to auto-log-in to.
-    if (isLocalRuntime()) return;
-    const sessionToken = localStorage.getItem('auth_scorer_token');
-    if (sessionToken) return;
-    if (autoLoginAttempted) return;
-    setAutoLoginAttempted(true);
-    autoLogin();
-  }, [autoLogin, autoLoginAttempted]);
-
-  const handlePasteSubmit = useCallback(async () => {
-    let raw = pastedUrl.trim();
-    if (!raw) {
-      setPasteError(t('auth.trustPasteInvalid'));
-      return;
-    }
-    // iOS Safari may copy URLs without the http:// protocol prefix
-    if (!/^https?:\/\//i.test(raw)) {
-      raw = 'http://' + raw;
-    }
-    try {
-      const url = new URL(raw);
-      const token = url.searchParams.get('trustToken');
-      if (!token) {
-        setPasteError(t('auth.trustPasteNoToken'));
-        return;
-      }
-      setPasteError('');
-      await loginWithTrustToken(token);
-    } catch {
-      setPasteError(t('auth.trustPasteInvalid'));
-    }
-  }, [pastedUrl, loginWithTrustToken, t]);
-
-  const handleCheckLogin = useCallback(async () => {
-    if (pendingApproval) {
-      const trustToken = localStorage.getItem('auth_trust_token');
-      if (trustToken) {
-        await loginWithTrustToken(trustToken);
-      }
-    } else {
-      await autoLogin();
-    }
-  }, [autoLogin, loginWithTrustToken, pendingApproval]);
+  const {
+    t,
+    loading,
+    error,
+    isLocalNetwork,
+    pendingApproval,
+    deviceID,
+    isStandalone,
+    isOffline,
+    pasteMode,
+    pastedUrl,
+    pasteError,
+    changePastedUrl,
+    togglePasteMode,
+    handlePasteSubmit,
+    handleCheckLogin,
+  } = useStageLoginPage();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 p-4">
@@ -112,12 +44,10 @@ export default function StageLoginPage() {
           <Alert color="warning" className="mb-4">
             {t('auth.trustPendingHint')}
             <br /><br />
-            <p className="font-medium text-xl">{t('auth.trustDeviceId')}:&nbsp;{deviceID.substring(0,8)}…</p>
+            <p className="font-medium text-xl">{t('auth.trustDeviceId')}:&nbsp;{deviceID.substring(0, 8)}…</p>
           </Alert>
         )}
 
-
-        {/* Offline + not PWA → guide user to open the installed app */}
         {isOffline && !isStandalone && (
           <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 mb-4">
             <p className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">
@@ -129,7 +59,6 @@ export default function StageLoginPage() {
           </div>
         )}
 
-        {/* iOS-specific instructions */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
           <p className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
             📱 {t('auth.trustIosNote')}
@@ -141,7 +70,6 @@ export default function StageLoginPage() {
           </ol>
         </div>
 
-        {/* Primary action: I've scanned the QR code */}
         <Button
           color="blue"
           className="w-full mb-2"
@@ -151,12 +79,11 @@ export default function StageLoginPage() {
           {loading ? t('auth.connecting') : t('auth.trustCheckButton')}
         </Button>
 
-        {/* Secondary action: paste link */}
         <Button
           color="gray"
           size="sm"
           className="w-full"
-          onClick={() => { setPasteMode(!pasteMode); setPasteError(''); }}
+          onClick={togglePasteMode}
         >
           {pasteMode ? t('common.cancel') : t('auth.trustPasteToggle')}
         </Button>
@@ -167,7 +94,7 @@ export default function StageLoginPage() {
               type="url"
               placeholder={t('auth.trustPastePlaceholder')}
               value={pastedUrl}
-              onChange={(e) => { setPastedUrl(e.target.value); setPasteError(''); }}
+              onChange={(event) => changePastedUrl(event.target.value)}
             />
             {pasteError && (
               <Alert color="failure" className="text-sm py-2">

@@ -1,15 +1,7 @@
-import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SummaryBackButton } from './SummaryBackButton';
 import { SummaryApproveButton } from './SummaryApproveButton';
-
-interface SummarySheetLayoutProps {
-  shooterName: string;
-  badges?: ReactNode;
-  children: ReactNode;
-  onBack: () => void;
-  onApprove: () => void;
-}
+import type { SummarySheetLayoutProps } from '../types';
 
 export function SummarySheetLayout({ shooterName, badges, children, onBack, onApprove }: SummarySheetLayoutProps) {
   const { t } = useTranslation();

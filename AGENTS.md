@@ -147,3 +147,52 @@ A release is published by pushing the tag: `.github/workflows/release.yml` build
 desktop installers and the signed Android APK for the tagged version and attaches them
 to a GitHub Release with a generated changelog. Setup, secrets and troubleshooting:
 `docs/releasing.md`.
+
+## Frontend component architecture
+
+Component files are **views**, not the place for business logic.
+
+- A `.tsx` component should mostly contain JSX/layout and a small number of custom
+  hook calls. Named event handlers, effects, API calls, store orchestration and
+  derived state belong in hooks.
+- Do not declare `interface`, `type`, `enum` or constants in a component file. Put
+  prop contracts and feature types in the feature's `types.ts`; put shared domain
+  types in `frontend/src/types/` or `packages/core`.
+- Do not declare named helper functions in a component. Put pure functions in
+  `frontend/src/utils/`; put React state/effects/event handlers in a feature hook
+  such as `use<Feature>View`, `use<Feature>Modal` or `use<Feature>Form`.
+- Components may keep only trivial inline prop forwarding and render mapping in
+  JSX. If a callback needs a name, a dependency array or more than one statement,
+  move it into a hook.
+- Extract repeated render fragments into child components. A component that needs
+  local presentational subcomponents should import them from their own files.
+- When two or more components share the same workflow, extract one reusable hook
+  parameterized by IDs, labels, callbacks or mutation functions. Do not copy the
+  same `try/catch/finally`, loading/result state, modal reset, drag/drop or
+  clipboard logic into multiple components.
+- Keep hooks focused on one concern. Compose small hooks rather than creating one
+  god-hook. Shared infrastructure lives in `frontend/src/hooks/`; feature-specific
+  hooks live there too and are named for the component or workflow they serve.
+- Shared async mutation plumbing: use `useMutationState` / `useBulkAction` instead
+  of repeating loading/result/error state.
+- Shared drag/drop plumbing: use `useRegistrationDnd` / `useSquadDnd`.
+- Shared clipboard plumbing: use `useCopyToClipboard`.
+- Never move scoring formulas out of `packages/core`; hooks may adapt UI state but
+  domain calculations stay in the shared domain layer.
+
+A component should read like this:
+
+```tsx
+const { rows, filters, handleRemove, modal } = useExampleView();
+
+return (
+  <div>
+    <Toolbar {...filters} />
+    <ExampleTable rows={rows} onRemove={handleRemove} />
+    <ExampleModal {...modal} />
+  </div>
+);
+```
+
+When touching a component, bring it into this shape rather than adding another
+local function or type to the `.tsx` file.

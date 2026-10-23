@@ -1,13 +1,6 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
 import { Button, Badge, TextInput, Table, TableHead, TableBody, TableRow, TableCell, TableHeadCell, Checkbox, Select, Label, Datepicker, theme } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { useMatchStore } from '../../stores/matchStore';
-import { useUIStore } from '../../stores/uiStore';
-import { useMatchExport } from '../../hooks/useMatchExport';
-import { useSelection } from '../../hooks/useSelection';
-import { formatDate } from '../../utils/constants';
-import { FIREARM_TYPES, MATCH_LEVELS } from '../../utils/constants';
-import type { FirearmType, MatchLevel } from '../../types/match';
+import { formatDate, FIREARM_TYPES, MATCH_LEVELS } from '../../utils/constants';
 import MatchDetail from './MatchDetail';
 import DeleteMatchModal from './DeleteMatchModal';
 import CreateMatchModal from './CreateMatchModal';
@@ -18,74 +11,44 @@ import CreateCupModal from '../cup/CreateCupModal';
 import SelectAllCheckbox from '../shared/SelectAllCheckbox';
 import BulkActionToolbar from '../shared/BulkActionToolbar';
 import { TbFileExport, TbFileUpload } from 'react-icons/tb';
-import { useTabMenuAction } from '../../hooks/useTabMenuAction';
-import { twMerge } from "tailwind-merge";
+import { twMerge } from 'tailwind-merge';
+import { useMatchListView } from '../../hooks/useMatchListView';
 
 export default function MatchList() {
-  const matches = useMatchStore((s) => s.matches);
-  const loading = useMatchStore((s) => s.loading);
-  const fetchMatches = useMatchStore((s) => s.fetchMatches);
-  const markCurrent = useMatchStore((s) => s.markCurrent);
-  const unmarkCurrent = useMatchStore((s) => s.unmarkCurrent);
-  const activeMatchId = useUIStore((s) => s.activeMatchId);
-  const setActiveMatch = useUIStore((s) => s.setActiveMatch);
-  const addToast = useUIStore((s) => s.addToast);
-  const { exporting } = useMatchExport();
   const { t } = useTranslation();
-  const [showCreate, setShowCreate] = useState(false);
-  const [showImport, setShowImport] = useState(false);
-  const [showExport, setShowExport] = useState<string | null>(null); // matchId
-  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [showBulkDelete, setShowBulkDelete] = useState(false);
-  const [showCreateCup, setShowCreateCup] = useState(false);
-  const [search, setSearch] = useState('');
-  const [filterFirearmType, setFilterFirearmType] = useState<FirearmType | ''>('');
-  const [filterLevel, setFilterLevel] = useState<MatchLevel | ''>('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const searchRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { fetchMatches(); }, [fetchMatches]);
-
-  useTabMenuAction('new-match', () => setShowCreate(true));
-  useTabMenuAction('import-match', () => setShowImport(true));
-  useTabMenuAction('focus-search', () => searchRef.current?.focus());
-
-  const filteredMatches = useMemo(() => {
-    let result = matches;
-    if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((m: any) =>
-        m.name.toLowerCase().includes(q) ||
-        m.organization.toLowerCase().includes(q) ||
-        m.firearm_type.toLowerCase().includes(q) ||
-        m.date?.includes(q)
-      );
-    }
-    if (filterFirearmType) {
-      result = result.filter((m: any) => m.firearm_type === filterFirearmType);
-    }
-    if (filterLevel) {
-      result = result.filter((m: any) => m.match_level === filterLevel);
-    }
-    if (dateFrom) {
-      result = result.filter((m: any) => m.date >= dateFrom);
-    }
-    if (dateTo) {
-      result = result.filter((m: any) => m.date <= dateTo);
-    }
-    return result;
-  }, [matches, search, filterFirearmType, filterLevel, dateFrom, dateTo]);
-
-  const matchIds = filteredMatches.map((m: any) => m.id);
-  const selection = useSelection(matchIds);
-
-  const selectedNames = selection.selectedArray
-    .map((id: string) => { const m = matches.find((m: any) => m.id === id); return m ? m.name : id; });
-
-  const handleBulkDeleted = () => {
-    selection.clearSelection();
-  };
+  const {
+    matches,
+    loading,
+    fetchMatches,
+    activeMatchId,
+    setActiveMatch,
+    exporting,
+    filters,
+    searchRef,
+    filteredMatches,
+    selection,
+    selectedNames,
+    showCreate,
+    setShowCreate,
+    showImport,
+    setShowImport,
+    showExport,
+    setShowExport,
+    deleteTarget,
+    setDeleteTarget,
+    showBulkDelete,
+    setShowBulkDelete,
+    showCreateCup,
+    setShowCreateCup,
+    handleSearchChange,
+    handleFirearmTypeChange,
+    handleLevelChange,
+    handleDateFromPickerChange,
+    handleDateToPickerChange,
+    handleToggleCurrent,
+    handleCreateCupClose,
+    handleBulkDeleted,
+  } = useMatchListView();
 
   if (activeMatchId) return <MatchDetail />;
 
@@ -95,37 +58,47 @@ export default function MatchList() {
         <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
           <h2 className="text-xl font-bold dark:text-white">{t('matches.count', { count: matches.length })}</h2>
           <div className="flex gap-2">
-            <Button size="sm" color="light" onClick={() => setShowImport(true)}><TbFileUpload className="mr-2" /> {t('matches.importMatch')}</Button>
+            <Button size="sm" color="light" onClick={() => setShowImport(true)}>
+              <TbFileUpload className="mr-2" /> {t('matches.importMatch')}
+            </Button>
             <Button size="sm" color="green" onClick={() => setShowCreate(true)}>{t('matches.newMatch')}</Button>
           </div>
         </div>
 
         <div className="flex items-center gap-4 mb-2 flex-wrap">
           <div className="flex-1">
-             <Label htmlFor="reg-search">{t('common.name')}</Label>
+            <Label htmlFor="reg-search">{t('common.name')}</Label>
             <TextInput
               ref={searchRef}
               placeholder={t('matches.searchMatches')}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={filters.search}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="flex-1 min-w-50"
             />
           </div>
-          <div className="">
+          <div>
             <Label className="text-sm text-gray-500 whitespace-nowrap">{t('matches.filterFirearmType')}:</Label>
-            <Select value={filterFirearmType} onChange={(e) => setFilterFirearmType(e.target.value as FirearmType | '')} className="w-36">
+            <Select
+              value={filters.firearmType}
+              onChange={(e) => handleFirearmTypeChange(e.target.value as typeof filters.firearmType)}
+              className="w-36"
+            >
               <option value="">{t('matches.allFirearmTypes')}</option>
-              {FIREARM_TYPES.map((f) => (
-                <option key={f.value} value={f.value}>{t(f.i18nKey)}</option>
+              {FIREARM_TYPES.map((firearm) => (
+                <option key={firearm.value} value={firearm.value}>{t(firearm.i18nKey)}</option>
               ))}
             </Select>
           </div>
-          <div className="">
+          <div>
             <Label className="text-sm text-gray-500 whitespace-nowrap">{t('matches.filterLevel')}</Label>
-            <Select value={String(filterLevel)} onChange={(e) => setFilterLevel(e.target.value === '' ? '' : (Number(e.target.value) as MatchLevel))} className="w-36">
+            <Select
+              value={String(filters.level)}
+              onChange={(e) => handleLevelChange(e.target.value === '' ? '' : (Number(e.target.value) as typeof filters.level))}
+              className="w-36"
+            >
               <option value="">{t('matches.allLevels')}</option>
-              {MATCH_LEVELS.map((l) => (
-                <option key={l.value} value={l.value}>{l.label}</option>
+              {MATCH_LEVELS.map((level) => (
+                <option key={level.value} value={level.value}>{level.label}</option>
               ))}
             </Select>
           </div>
@@ -133,17 +106,8 @@ export default function MatchList() {
             <Label className="text-sm text-gray-500 whitespace-nowrap">{t('matches.filterDateFrom')}</Label>
             <Datepicker
               className="mt-0.5"
-              value={dateFrom ? new Date(dateFrom) : null}
-              onChange={(date: Date | null) => {
-                if (date) {
-                  const yyyy = date.getFullYear();
-                  const mm = String(date.getMonth() + 1).padStart(2, '0');
-                  const dd = String(date.getDate()).padStart(2, '0');
-                  setDateFrom(`${yyyy}-${mm}-${dd}`);
-                } else {
-                  setDateFrom('');
-                }
-              }}
+              value={filters.dateFrom ? new Date(filters.dateFrom) : null}
+              onChange={handleDateFromPickerChange}
               placeholder={t('matches.filterDateFrom')}
             />
           </div>
@@ -151,19 +115,10 @@ export default function MatchList() {
             <Label className="text-sm text-gray-500 whitespace-nowrap">{t('matches.filterDateTo')}</Label>
             <Datepicker
               className="mt-0.5"
-              value={dateTo ? new Date(dateTo) : null}
-              onChange={(date: Date | null) => {
-                if (date) {
-                  const yyyy = date.getFullYear();
-                  const mm = String(date.getMonth() + 1).padStart(2, '0');
-                  const dd = String(date.getDate()).padStart(2, '0');
-                  setDateTo(`${yyyy}-${mm}-${dd}`);
-                } else {
-                  setDateTo('');
-                }
-              }}
+              value={filters.dateTo ? new Date(filters.dateTo) : null}
+              onChange={handleDateToPickerChange}
               placeholder={t('matches.filterDateTo')}
-              theme={{popup: {root: {base: twMerge(theme.datepicker.popup.root.base, "right-0")}}}}
+              theme={{ popup: { root: { base: twMerge(theme.datepicker.popup.root.base, 'right-0') } } }}
             />
           </div>
         </div>
@@ -198,52 +153,49 @@ export default function MatchList() {
                 <TableHeadCell>{t('matches.firearm')}</TableHeadCell>
                 <TableHeadCell>{t('matches.level')}</TableHeadCell>
                 <TableHeadCell>{t('matches.shooters')}</TableHeadCell>
-                <TableHeadCell></TableHeadCell>
+                <TableHeadCell />
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredMatches.map((m: any) => (
+              {filteredMatches.map((match) => (
                 <TableRow
-                  key={m.id}
-                  className={`cursor-pointer group ${selection.isSelected(m.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
-                  onClick={() => setActiveMatch(m.id)}
+                  key={match.id}
+                  className={`cursor-pointer group ${selection.isSelected(match.id) ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
+                  onClick={() => setActiveMatch(match.id)}
                 >
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Checkbox className="size-5 cursor-pointer" checked={selection.isSelected(m.id)} onChange={() => selection.toggle(m.id)} />
+                    <Checkbox
+                      className="size-5 cursor-pointer"
+                      checked={selection.isSelected(match.id)}
+                      onChange={() => selection.toggle(match.id)}
+                    />
                   </TableCell>
-                  <TableCell className="font-medium dark:text-white whitespace-nowrap">{m.name}</TableCell>
-                  <TableCell className="">{formatDate(m.date)}</TableCell>
+                  <TableCell className="font-medium dark:text-white whitespace-nowrap">{match.name}</TableCell>
+                  <TableCell>{formatDate(match.date)}</TableCell>
                   <TableCell>
-                    <Badge color={m.organization === 'IPSC' ? 'info' : 'purple'} size="sm">{m.organization}</Badge>
+                    <Badge color={match.organization === 'IPSC' ? 'info' : 'purple'} size="sm">{match.organization}</Badge>
                   </TableCell>
                   <TableCell>
-                    <Badge color="gray" size="sm">{t(`firearmTypes.${m.firearm_type}`)}</Badge>
+                    <Badge color="gray" size="sm">{t(`firearmTypes.${match.firearm_type}`)}</Badge>
                   </TableCell>
-                  <TableCell className="">
-                    {m.match_level ? <Badge color="indigo" size="sm">{t('matches.levelBadge', { level: m.match_level })}</Badge> : '—'}
+                  <TableCell>
+                    {match.match_level ? <Badge color="indigo" size="sm">{t('matches.levelBadge', { level: match.match_level })}</Badge> : '—'}
                   </TableCell>
-                  <TableCell className="">{m.shooter_count ?? '—'}</TableCell>
+                  <TableCell>{(match as any).shooter_count ?? '—'}</TableCell>
                   <TableCell>
                     <div className="flex gap-2">
-                      
                       <Button
                         size="xs"
-                        color={m.is_current ? "green" : "gray"}
+                        color={match.is_current ? 'green' : 'gray'}
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (m.is_current) {
-                            unmarkCurrent();
-                            addToast(t('matches.unsetAsCurrent'), 'success');
-                          } else {
-                            markCurrent(m.id);
-                            addToast(t('matches.setAsCurrentDone'), 'success');
-                          }
+                          handleToggleCurrent(match);
                         }}
                       >
-                        {m.is_current ? '● ' + t('matches.current') : t('matches.setAsCurrent')}
+                        {match.is_current ? `● ${t('matches.current')}` : t('matches.setAsCurrent')}
                       </Button>
                       <Button
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(m.id); }}
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(match.id); }}
                         size="xs"
                         color="red"
                       >
@@ -254,10 +206,7 @@ export default function MatchList() {
                         color="light"
                         title={t('matches.exportMatch')}
                         disabled={exporting}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowExport(m.id);
-                        }}
+                        onClick={(e) => { e.stopPropagation(); setShowExport(match.id); }}
                       >
                         <TbFileExport />
                       </Button>
@@ -277,10 +226,10 @@ export default function MatchList() {
       <ImportMatchModal show={showImport} onClose={() => setShowImport(false)} onImported={fetchMatches} />
       {showExport && (
         <ExportMatchModal
-          show={true}
+          show
           onClose={() => setShowExport(null)}
           matchId={showExport}
-          matchName={matches.find((m: any) => m.id === showExport)?.name || ''}
+          matchName={matches.find((match) => match.id === showExport)?.name || ''}
         />
       )}
       <BulkDeleteMatchesModal
@@ -292,7 +241,7 @@ export default function MatchList() {
       />
       <CreateCupModal
         show={showCreateCup}
-        onClose={() => { setShowCreateCup(false); selection.clearSelection(); }}
+        onClose={handleCreateCupClose}
         preselectedMatchIds={selection.selectedArray}
       />
     </div>

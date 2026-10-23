@@ -1,57 +1,23 @@
-import { useMemo } from 'react';
-import { Badge } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useConstLabels } from '../../../hooks/useConstLabels';
-import { divisionLabel } from '../../../utils/constants';
-import { calculatePreview } from '../../../utils/scoring';
 import { formatTimeDisplay } from '../../../utils/timeFormat';
 import { SummarySheetLayout } from '../shared/SummarySheetLayout';
+import { useIPSCSummary } from '../../../hooks/useIPSCSummary';
 import type { ScoreSummarySheetProps } from '../ScoreSummarySheet';
 
-export default function IPSCSummary({ stage, score, shooterName, shooterDetails, onBack, onApprove }: ScoreSummarySheetProps) {
-  const { t } = useTranslation();
-  const { categoryLabel, powerFactorLabel } = useConstLabels();
-
-  const paperTargets = score.targets.filter(t => t.target_type === 'paper');
-  const steelTargets = score.targets.filter(t => t.target_type === 'steel');
-  const npmTargets = score.targets.filter(t => t.target_type === 'npm');
-
-  const totalAlpha = paperTargets.reduce((s, t) => s + t.alpha, 0) + steelTargets.filter(t => t.steel_hit === true).length;
-  const totalCharlie = paperTargets.reduce((s, t) => s + t.charlie, 0);
-  const totalDelta = paperTargets.reduce((s, t) => s + t.delta, 0);
-  const totalMiss = paperTargets.reduce((s, t) => s + t.miss, 0) + steelTargets.filter(t => t.steel_hit === false).length;
-  const totalNS = score.targets.reduce((s, t) => s + t.no_shoot_hits, 0);
-  const totalNPM = npmTargets.filter(t => t.steel_hit === true).length;
-
-  const preview = useMemo(
-    () => calculatePreview(
-      score.targets.map(t => ({ ...t, hits_per_paper: stage.hits_per_paper })),
-      score.time,
-      stage.scoring_type as any,
-      shooterDetails!.powerFactor as any,
-      score.procedural_count,
-      score.ftsa_count,
-      score.extra_shot_count,
-      score.extra_hit_count,
-      score.stacking_count,
-      score.overtime_shot_count,
-    ),
-    [score, stage, shooterDetails!.powerFactor],
-  );
-
-  const totalPenalties = score.procedural_count + score.ftsa_count
-    + score.extra_shot_count + score.extra_hit_count
-    + score.stacking_count + score.overtime_shot_count;
-
-  const badges = shooterDetails ? (
-    <>
-      <Badge color="blue">{divisionLabel(shooterDetails.division)}</Badge>
-      <Badge color="gray">{categoryLabel(shooterDetails.category)}</Badge>
-      <Badge color={shooterDetails.powerFactor === 'major' ? 'warning' : 'success'}>
-        {powerFactorLabel(shooterDetails.powerFactor)}
-      </Badge>
-    </>
-  ) : undefined;
+export default function IPSCSummary(props: ScoreSummarySheetProps) {
+  const { stage, score, shooterName, onBack, onApprove } = props;
+  const {
+    t,
+    npmTargets,
+    totalAlpha,
+    totalCharlie,
+    totalDelta,
+    totalMiss,
+    totalNS,
+    totalNPM,
+    preview,
+    totalPenalties,
+    badges,
+  } = useIPSCSummary(props);
 
   return (
     <SummarySheetLayout shooterName={shooterName} badges={badges} onBack={onBack} onApprove={onApprove}>

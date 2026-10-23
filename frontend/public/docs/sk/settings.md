@@ -2,7 +2,7 @@
 
 ![Modal nastavení](/docs/screenshots/settings-modal.png)
 
-Modal Nastavenia (ikona ⚙️ v hlavičke, iba pre administrátora) umožňuje konfigurovať jazyk, vzhľad a admin heslo aplikácie.
+Modal Nastavenia (ikona ⚙️ v hlavičke, iba pre administrátora) umožňuje konfigurovať jazyk a vzhľad aplikácie, zmeniť administrátorské heslo, spravovať zálohy databázy a otvoriť audit log.
 
 ## Jazyk
 
@@ -25,6 +25,10 @@ Predvolené admin heslo je `admin`. Pre zmenu:
 3. **Potvrďte** nové heslo.
 
 Heslo je hashované a uložené na serveri. Zmena hesla neovplyvní už prihlásené admin relácie — týka sa iba budúcich prihlásení.
+
+## Databáza
+
+Panel **Databáza** exportuje a importuje úplné zálohy databázy. V Electron desktop aplikácii tiež nastavuje priečinok záloh a automatické zálohovanie. Formáty, harmonogram a postup obnovy nájdete v [Databáza a zálohy](database.md).
 
 ## Audit log
 

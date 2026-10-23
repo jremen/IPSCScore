@@ -1,17 +1,9 @@
 import { Select, Label } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useUIStore } from '../../stores/uiStore';
+import { useLanguageSelector } from '../../hooks/useLanguageSelector';
 import type { Language } from '../../stores/uiStore';
 
 export default function LanguageSelector() {
-  const { t, i18n } = useTranslation();
-  const language = useUIStore((s) => s.language);
-  const setLanguage = useUIStore((s) => s.setLanguage);
-
-  const handleChange = (lang: Language) => {
-    setLanguage(lang);
-    i18n.changeLanguage(lang);
-  };
+  const { t, language, changeLanguage } = useLanguageSelector();
 
   return (
     <div className="flex items-center gap-2">
@@ -19,7 +11,7 @@ export default function LanguageSelector() {
         <Select
           id="language-select"
           value={language}
-          onChange={(e) => handleChange(e.target.value as Language)}
+          onChange={(event) => changeLanguage(event.target.value as Language)}
           className="[&_select]:py-1 [&_select]:text-sm [&_select]:bg-gray-800 [&_select]:text-white"
         >
           <option value="en">{t('settings.english')}</option>

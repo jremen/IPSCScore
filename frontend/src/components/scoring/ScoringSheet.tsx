@@ -1,8 +1,5 @@
-import { useMemo } from 'react';
 import { Alert } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import type { Stage } from '../../types/stage';
-import type { ScoreInput } from '../../types/scoring';
 import { useScoringReadOnly } from '../../hooks/useScoringReadOnly';
 import IPSCScoringSheet from './sheets/IPSCScoringSheet';
 import IDPAScoringSheet from './sheets/IDPAScoringSheet';
@@ -11,21 +8,13 @@ import MultiGunScoringSheet from './sheets/MultiGunScoringSheet';
 import RingScoringSheet from './sheets/RingScoringSheet';
 import HitCountScoringSheet from './sheets/HitCountScoringSheet';
 
-interface Props {
-  stage: Stage;
-  score: ScoreInput;
-  /** @deprecated Shooter is now read from the store directly in each sheet */
-  shooter?: any;
-}
+import type { ScoringSheetContainerProps } from './types';
 
-export default function ScoringSheet({ stage, score }: Props) {
+export default function ScoringSheet({ stage, score }: ScoringSheetContainerProps) {
   const scoringType = stage.scoring_type;
   const config = stage.config || {};
   const isReadOnly = useScoringReadOnly();
   const { t } = useTranslation();
-
-  // All sheets read shooter from the store directly (principle: no prop drilling)
-  const sheetProps = useMemo(() => ({ stage, score }), [stage, score]);
 
   return (
     <>
@@ -37,25 +26,25 @@ export default function ScoringSheet({ stage, score }: Props) {
       {(() => {
         switch (scoringType) {
           case 'idpa':
-            return <IDPAScoringSheet {...sheetProps} />;
+            return <IDPAScoringSheet stage={stage} score={score} />;
           case 'action_steel':
-            return <ActionSteelScoringSheet {...sheetProps} />;
+            return <ActionSteelScoringSheet stage={stage} score={score} />;
           case 'multi_gun':
-            return <MultiGunScoringSheet {...sheetProps} />;
-           case 'bullseye':
-           case 'archery':
-           case 'issf':
-             return <RingScoringSheet {...sheetProps} />;
+            return <MultiGunScoringSheet score={score} />;
+          case 'bullseye':
+          case 'archery':
+          case 'issf':
+            return <RingScoringSheet stage={stage} score={score} />;
           case 'long_range':
             if (config.variant === 'f_class') {
-              return <RingScoringSheet {...sheetProps} />;
+              return <RingScoringSheet stage={stage} score={score} />;
             }
-            return <HitCountScoringSheet {...sheetProps} />;
+            return <HitCountScoringSheet stage={stage} score={score} />;
           case 'nrl22':
-            return <HitCountScoringSheet {...sheetProps} />;
+            return <HitCountScoringSheet stage={stage} score={score} />;
           // comstock, virginia, fixed_time, hit_factor, chrono — all use IPSC sheet
           default:
-            return <IPSCScoringSheet {...sheetProps} />;
+            return <IPSCScoringSheet stage={stage} score={score} />;
         }
       })()}
     </>

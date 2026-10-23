@@ -1,44 +1,17 @@
-import { useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Alert } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
-import { api } from '../../services/api';
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface BulkRemoveRegistrationsModalProps {
-  show: boolean;
-  onClose: () => void;
-  registrationIds: string[];
-  registrationNames: string[];
-  matchId: string;
-  onRemoved: () => void;
-}
+import { useBulkRemoveRegistrationsModal } from '../../hooks/useBulkRemoveRegistrationsModal';
+import type { BulkRemoveRegistrationsModalProps } from './types';
 
 export default function BulkRemoveRegistrationsModal({ show, onClose, registrationIds, registrationNames, matchId, onRemoved }: BulkRemoveRegistrationsModalProps) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ removed: number; failed: Array<{ id: string; name: string; reason: string }> } | null>(null);
-
-  const handleRemove = async () => {
-    setLoading(true);
-    try {
-      const res = await api.bulkRemoveRegistrations(matchId, registrationIds);
-      setResult(res);
-      if (res.failed.length === 0) {
-        onRemoved();
-        setTimeout(onClose, 1500);
-      }
-    } catch (err: any) {
-      setResult({ removed: 0, failed: [{ id: '', name: '', reason: err.message || t('common.unknownError') }] });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleClose = () => {
-    setResult(null);
-    onClose();
-  };
-  useEscClose(handleClose);
+  const { loading, result, handleRemove, handleClose } = useBulkRemoveRegistrationsModal({
+    matchId,
+    registrationIds,
+    registrationNames,
+    onClose,
+    onRemoved,
+  });
 
   return (
     <Modal show={show} onClose={handleClose} size="md">
@@ -55,8 +28,8 @@ export default function BulkRemoveRegistrationsModal({ show, onClose, registrati
               <Alert color="warning">
                 <p className="font-medium mb-1">{t('bulkRemove.partialSuccess', { removed: result.removed, failed: result.failed.length })}</p>
                 <ul className="text-sm list-disc pl-4">
-                  {result.failed.map((f, i) => (
-                    <li key={i}>{f.name || f.id}: {f.reason}</li>
+                  {result.failed.map((failure, index) => (
+                    <li key={index}>{failure.name || failure.id}: {failure.reason}</li>
                   ))}
                 </ul>
               </Alert>
@@ -64,12 +37,10 @@ export default function BulkRemoveRegistrationsModal({ show, onClose, registrati
           </div>
         ) : (
           <div className="space-y-3">
-            <p>
-              {t('bulkRemove.confirm', { count: registrationIds.length })}
-            </p>
+            <p>{t('bulkRemove.confirm', { count: registrationIds.length })}</p>
             <div className="max-h-40 overflow-y-auto text-sm text-gray-600 dark:text-gray-400 border rounded p-2">
-              {registrationNames.slice(0, 10).map((name, i) => (
-                <div key={i}>{name}</div>
+              {registrationNames.slice(0, 10).map((name, index) => (
+                <div key={index}>{name}</div>
               ))}
               {registrationNames.length > 10 && (
                 <div className="italic">...{t('bulkDelete.andMore', { count: registrationNames.length - 10 })}</div>

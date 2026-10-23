@@ -1,41 +1,10 @@
-import { useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
-import { useCupStore } from '../../stores/cupStore';
-import { useUIStore } from '../../stores/uiStore';
-import { useEscClose } from '../../hooks/useEscClose';
 import { TbTrash } from 'react-icons/tb';
-
-interface DeleteCupModalProps {
-  show: boolean;
-  onClose: () => void;
-  cupId: string | null;
-}
+import { useDeleteCupModal } from '../../hooks/useDeleteCupModal';
+import type { DeleteCupModalProps } from './types';
 
 export default function DeleteCupModal({ show, onClose, cupId }: DeleteCupModalProps) {
-  const { t } = useTranslation();
-  const cups = useCupStore((s) => s.cups);
-  const deleteCup = useCupStore((s) => s.deleteCup);
-  const addToast = useUIStore((s) => s.addToast);
-  const [loading, setLoading] = useState(false);
-
-  const cup = cups.find((c) => c.id === cupId);
-  const handleClose = () => onClose();
-  useEscClose(handleClose);
-
-  const handleDelete = async () => {
-    if (!cupId) return;
-    setLoading(true);
-    try {
-      await deleteCup(cupId);
-      addToast(t('cups.deleted'), 'success');
-      handleClose();
-    } catch (err: any) {
-      addToast(err.message || t('common.unknownError'), 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { t, cup, loading, handleDelete, handleClose } = useDeleteCupModal(cupId, onClose);
 
   return (
     <Modal show={show} onClose={handleClose} size="md">

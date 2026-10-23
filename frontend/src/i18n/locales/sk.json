@@ -963,6 +963,7 @@
     "sections": {
       "overview": "Prehľad",
       "matches": "Súťaže",
+      "cups": "Poháre",
       "stages": "Situácie",
       "scoringOverview": "Bodovanie",
       "scoringDesktop": "Bodovanie na počítači",
@@ -971,6 +972,7 @@
       "squadding": "Rozdelenie do squad-ov",
       "dq": "Diskvalifikácia (B-out)",
       "results": "Výsledky",
+      "kiosk": "Kiosk režim",
       "output": "Výstupy a exporty",
       "settings": "Nastavenia",
       "database": "Databáza a zálohy",

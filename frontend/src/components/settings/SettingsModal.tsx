@@ -1,22 +1,14 @@
-import { useState } from 'react';
 import { Modal, ModalHeader, ModalBody, ModalFooter, Button } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
 import LanguageSelector from './LanguageSelector';
 import DatabaseSettings from './DatabaseSettings';
 import PowerSettings from './PowerSettings';
 import AdminPasswordSection from './AdminPasswordSection';
 import AuditLogModal from './AuditLogModal';
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface SettingsModalProps {
-  show: boolean;
-  onClose: () => void;
-}
+import { useSettingsModal } from '../../hooks/useSettingsModal';
+import type { SettingsModalProps } from './types';
 
 export default function SettingsModal({ show, onClose }: SettingsModalProps) {
-  const { t } = useTranslation();
-  useEscClose(onClose);
-  const [showAuditLog, setShowAuditLog] = useState(false);
+  const { t, showAuditLog, openAuditLog, closeAuditLog } = useSettingsModal(onClose);
 
   return (
     <Modal show={show} onClose={onClose} size="7xl">
@@ -31,7 +23,7 @@ export default function SettingsModal({ show, onClose }: SettingsModalProps) {
             </div>
           </div>
 
-            <DatabaseSettings />
+          <DatabaseSettings />
         </div>
 
         <PowerSettings />
@@ -39,7 +31,7 @@ export default function SettingsModal({ show, onClose }: SettingsModalProps) {
         <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-6">
           <h3 className="text-lg font-semibold dark:text-white mb-2">{t('settings.auditLog')}</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">{t('settings.auditLogDescription')}</p>
-          <Button size="sm" color="purple" onClick={() => setShowAuditLog(true)}>
+          <Button size="sm" color="purple" onClick={openAuditLog}>
             📋 {t('settings.viewAuditLog')}
           </Button>
         </div>
@@ -48,7 +40,7 @@ export default function SettingsModal({ show, onClose }: SettingsModalProps) {
         <Button color="gray" onClick={onClose}>{t('common.cancel')}</Button>
       </ModalFooter>
 
-      <AuditLogModal show={showAuditLog} onClose={() => setShowAuditLog(false)} />
+      <AuditLogModal show={showAuditLog} onClose={closeAuditLog} />
     </Modal>
   );
 }

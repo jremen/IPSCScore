@@ -30,7 +30,7 @@ Kliknutím na **Uložiť** zapíšete skóre. Riadok strelca dostane zelené za�
 
 ## Súhrnné zobrazenie (vzdialení zadávači)
 
-Ne-administratívny zadávač vidí po zadaní zásahov **súhrnné zobrazenie** — skontroluje vstupy a klikne na **Potvrdiť** pre odoslanie. Hostiteľ potom prijme alebo zamietne zo svojho zariadenia.
+Ne-administratívny zadávač vidí po zadaní zásahov **súhrnné zobrazenie** — skontroluje vstupy a skóre a klikne na **Schváliť** pre odoslanie. Skóre sa uloží okamžite. Ak hostiteľ už má pre toho istého strelca a situáciu iné skóre, server ponechá skóre hostiteľa a zastarané odoslanie odmietne.
 
 ![Súhrnné zobrazenie skóre](/docs/screenshots/scoring-desktop-summary.png)
 

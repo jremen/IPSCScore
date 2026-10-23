@@ -1,6 +1,4 @@
-import { useEffect } from 'react';
-import { useLanUrl } from '../hooks/useLanUrl';
-import { setScoringBaseUrl } from '../services/api';
+import { useScoringBaseUrl } from '../hooks/useScoringBaseUrl';
 
 /**
  * Reads the LAN URL for the scoring server and caches it so that
@@ -8,15 +6,6 @@ import { setScoringBaseUrl } from '../services/api';
  * Mount once at the top of the app (e.g. in main.tsx).
  */
 export function ScoringBaseUrlProvider() {
-  const { domainUrls, loading } = useLanUrl();
-
-  useEffect(() => {
-    if (!loading && domainUrls?.scoring) {
-      // Strip /scoring path to get just the origin (e.g. "http://192.168.1.5:3001")
-      const url = domainUrls.scoring.replace(/\/scoring\/?$/, '');
-      setScoringBaseUrl(url);
-    }
-  }, [domainUrls, loading]);
-
+  useScoringBaseUrl();
   return null;
 }

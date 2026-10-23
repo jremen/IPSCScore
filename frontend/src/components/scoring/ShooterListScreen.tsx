@@ -1,18 +1,8 @@
 import { Badge, TextInput } from 'flowbite-react';
-import { useTranslation } from 'react-i18next';
 import { TbRefresh, TbArrowLeft } from 'react-icons/tb';
-
-import { useScoringStore } from '../../stores/scoringStore';
-import { useStageStore } from '../../stores/stageStore';
-import { useShooterList } from '../../hooks/useShooterList';
 import { divisionLabel } from '../../utils/constants';
-import { useEscClose } from '../../hooks/useEscClose';
-
-interface ShooterListScreenProps {
-  show: boolean;
-  onClose: () => void;
-  onSelect: (regId: string) => void;
-}
+import { useShooterListScreen } from '../../hooks/useShooterListScreen';
+import type { ShooterListScreenProps } from './types';
 
 /**
  * Full-screen shooter picker — replaces the old ShooterDropdown.
@@ -23,30 +13,24 @@ interface ShooterListScreenProps {
  * Pinned bottom: back button.
  */
 export default function ShooterListScreen({ show, onClose, onSelect }: ShooterListScreenProps) {
-  const { t } = useTranslation();
-  const currentRegistrationId = useScoringStore((s) => s.currentRegistrationId);
-  const activeStageId = useScoringStore((s) => s.activeStageId);
-  const stages = useStageStore((s) => s.stages);
-  const currentStage = stages.find(s => s.id === activeStageId) ?? null;
-  const { search, setSearch, list, shooterListSort, setShooterListSort,
-          reshuffleRandomOrder, scoredIds } = useShooterList();
-
-  useEscClose(show ? onClose : undefined);
+  const {
+    t,
+    search,
+    setSearch,
+    list,
+    shooterListSort,
+    setShooterListSort,
+    reshuffleRandomOrder,
+    scoredIds,
+    currentRegistrationId,
+    stageLabel,
+    selectShooter,
+  } = useShooterListScreen(show, onClose, onSelect);
 
   if (!show) return null;
 
-  const handleSelect = (regId: string) => {
-    onSelect(regId);
-    onClose();
-  };
-
-  const stageLabel = currentStage
-    ? `${t('scoring.stage', { number: currentStage.stage_number })}: ${currentStage.name}`
-    : t('scoring.shooterList');
-
   return (
     <div className="fixed inset-0 z-1000 flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3 shrink-0">
         <button
           onClick={onClose}
@@ -57,12 +41,11 @@ export default function ShooterListScreen({ show, onClose, onSelect }: ShooterLi
         <div className="text-xl font-bold mt-1 dark:text-white">{stageLabel}</div>
       </div>
 
-      {/* Toolbar — search + sort toggle + refresh */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-3 shrink-0 space-y-2">
         <TextInput
           placeholder={t('scoring.searchShooter')}
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(event) => setSearch(event.target.value)}
           sizing="md"
         />
         <div className="flex items-center gap-2">
@@ -105,18 +88,17 @@ export default function ShooterListScreen({ show, onClose, onSelect }: ShooterLi
         </div>
       </div>
 
-      {/* List */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         {list.length === 0 ? (
           <p className="text-center text-gray-400 text-sm py-6">{t('scoring.noShootersFound')}</p>
         ) : (
-          list.map((r) => {
-            const isCurrent = r.id === currentRegistrationId;
-            const isScored = scoredIds.has(r.id);
+          list.map((registration) => {
+            const isCurrent = registration.id === currentRegistrationId;
+            const isScored = scoredIds.has(registration.id);
             return (
               <button
-                key={r.id}
-                onClick={() => handleSelect(r.id)}
+                key={registration.id}
+                onClick={() => selectShooter(registration.id)}
                 className={`w-full text-left px-3 py-2.5 text-lg flex items-center justify-between border-b border-gray-100 dark:border-gray-700 hover:bg-blue-50 dark:hover:bg-gray-700 transition-colors min-h-11 ${
                   isCurrent ? 'bg-blue-50 dark:bg-blue-900/30 eink:bg-black! eink:text-white!' : ''
                 }`}
@@ -126,11 +108,11 @@ export default function ShooterListScreen({ show, onClose, onSelect }: ShooterLi
                     <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-green-500 text-white text-2.5 leading-none shrink-0">✓</span>
                   )}
                   <span className="truncate">
-                    {r.first_name} {r.last_name}
+                    {registration.first_name} {registration.last_name}
                   </span>
                 </span>
                 <div className="flex gap-1 shrink-0 ml-2 flex-wrap justify-end">
-                  <Badge size="sm" color="blue">{divisionLabel(r.effective_division)}</Badge>
+                  <Badge size="sm" color="blue">{divisionLabel(registration.effective_division)}</Badge>
                 </div>
               </button>
             );
@@ -138,7 +120,6 @@ export default function ShooterListScreen({ show, onClose, onSelect }: ShooterLi
         )}
       </div>
 
-      {/* Bottom bar */}
       <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-3 shrink-0">
         <button
           onClick={onClose}

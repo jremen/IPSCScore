@@ -30,7 +30,7 @@ Click **Save** to write the score. The shooter row gets a green check mark and t
 
 ## Summary view (remote scorers)
 
-A non-admin scorer sees a **Summary** view after entering hits — they review the inputs and click **Confirm** to submit. The host then accepts or rejects from their device.
+A non-admin scorer sees a **Summary** view after entering hits — they review the inputs and score, then click **Approve** to submit. The score is saved immediately. If a host already has a different score for the same shooter and stage, the server keeps the host score and rejects the stale submission.
 
 ![Score summary view](/docs/screenshots/scoring-desktop-summary.png)
 

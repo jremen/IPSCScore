@@ -2,15 +2,7 @@ import { Modal, ModalHeader, ModalBody, ModalFooter, Button, Label, Select } fro
 import { useTranslation } from 'react-i18next';
 import { useEscClose } from '../../../hooks/useEscClose';
 import { DQ_REASONS } from '../../../utils/constants';
-
-interface DqConfirmModalProps {
-  show: boolean;
-  onClose: () => void;
-  shooterName: string;
-  dqReason: string;
-  onReasonChange: (reason: string) => void;
-  onConfirm: () => void;
-}
+import type { DqConfirmModalProps } from '../types';
 
 export default function DqConfirmModal({ show, onClose, shooterName, dqReason, onReasonChange, onConfirm }: DqConfirmModalProps) {
   const { t } = useTranslation();

@@ -12,11 +12,26 @@ Záložka Súťaže zobrazuje všetky súťaže na tomto zariadení. Aktuálna s
 
 - Nastaviť alebo zrušiť súťaž ako aktuálnu
 - Otvoriť detail súťaže
-- Exportovať súťaž ako JSON
-- Importovať súťaž z JSON
+- Exportovať súťaž ako IPSCScore JSON alebo Practiscore `.psc`
+- Importovať súťaž z JSON, WinMSS alebo Practiscore
+- Označiť viac súťaží a vytvoriť z nich pohár
 - Vymazať súťaž
 
 **Prejsť v aplikácii:** [Záložka Súťaže](app-tab:matches)
+
+## Import a export súťaží
+
+Pomocou **Importovať súťaž** v hornej časti záložky Súťaže môžete importovať:
+
+- IPSCScore `.match.json`
+- WinMSS `.mdb` / `.accdb`
+- Practiscore `.psc`
+
+Import WinMSS a Practiscore potrebuje serverovú časť prehliadača/desktopu. Samostatná aplikácia pre Android/iOS ponúka iba možnosť IPSCScore JSON.
+
+Tlačidlom exportu v riadku súťaže vyberiete IPSCScore `.match.json` alebo v prehliadači/desktop aplikácii Practiscore `.psc`.
+
+Pohár z viacerých súťaží vytvoríte tak, že ich označíte checkboxmi a v hromadnej lište zvolíte **Vytvoriť pohár**. Viac v [Poháre](cups.md).
 
 ## Vytvorenie súťaže
 

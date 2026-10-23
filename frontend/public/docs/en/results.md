@@ -14,6 +14,12 @@ Open the **Results** tab to see the leaderboard. There are five sub-tabs, each r
 
 **To do this in the app:** [Go to Results](app-tab:results)
 
+## Public results and kiosk
+
+The public results page at `/results` is read-only and available without login. It shows the current match and is the target of the Results QR code.
+
+For a TV or projector, open `/results/kiosk`. Kiosk mode rotates divisions automatically, scrolls long tables, and shows live match progress. See [Kiosk mode](kiosk.md).
+
 ## Shooter drill-down
 
 Click any shooter's name in any results table to open their summary view: every stage with their raw score, penalties, hit factor, and match percentage.

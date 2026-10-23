@@ -1,42 +1,32 @@
-import { useState } from 'react';
-import { useLanUrl } from '../../hooks/useLanUrl';
 import { useTranslation } from 'react-i18next';
-import QRCodeModal, { type QRCodeModalMode } from './QRCodeModal';
+import QRCodeModal from './QRCodeModal';
 import ScorerTrustModal from './ScorerTrustModal';
+import { useLanUrlBadge } from '../../hooks/useLanUrlBadge';
 
 export default function LanUrlBadge() {
-  const { url, domainUrls } = useLanUrl();
+  const {
+    url,
+    domainUrls,
+    qrModalMode,
+    showTrustModal,
+    copied,
+    copyIp,
+    openResultsQr,
+    openSquadsQr,
+    openTrustModal,
+    closeQr,
+    closeTrust,
+  } = useLanUrlBadge();
   const { t } = useTranslation();
-  const [qrModalMode, setQrModalMode] = useState<QRCodeModalMode | null>(null);
-  const [showTrustModal, setShowTrustModal] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
 
   if (!url && !domainUrls) return null;
-
-  const handleCopy = async (text: string, key: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(key);
-      setTimeout(() => setCopied(null), 2000);
-    } catch {
-      // Fallback: select text
-      const el = document.createElement('textarea');
-      el.value = text;
-      document.body.appendChild(el);
-      el.select();
-      document.execCommand('copy');
-      document.body.removeChild(el);
-      setCopied(key);
-      setTimeout(() => setCopied(null), 2000);
-    }
-  };
 
   return (
     <>
       <div className="hidden lg:flex items-center gap-1.5 flex-wrap">
         {url && (
           <button
-            onClick={() => handleCopy(url, 'ip')}
+            onClick={copyIp}
             className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-gray-700 hover:bg-gray-600 text-green-400 rounded-full transition-colors cursor-pointer whitespace-nowrap"
             title={t('header.copyUrl')}
           >
@@ -49,21 +39,21 @@ export default function LanUrlBadge() {
         {domainUrls && (
           <>
             <button
-              onClick={() => setQrModalMode('results')}
+              onClick={openResultsQr}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-blue-700 hover:bg-blue-600 text-white rounded-full transition-colors cursor-pointer whitespace-nowrap"
               title={t('header.qrResultsHint')}
             >
               🏆 {t('header.qrResultsLink')}
             </button>
             <button
-              onClick={() => setShowTrustModal(true)}
+              onClick={openTrustModal}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-orange-700 hover:bg-orange-600 text-white rounded-full transition-colors cursor-pointer whitespace-nowrap"
               title={t('header.qrScoringHint')}
             >
               🎯 {t('header.qrScoringLink')}
             </button>
             <button
-              onClick={() => setQrModalMode('squads')}
+              onClick={openSquadsQr}
               className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono bg-purple-700 hover:bg-purple-600 text-white rounded-full transition-colors cursor-pointer whitespace-nowrap"
               title={t('header.qrSquadsHint')}
             >
@@ -74,17 +64,17 @@ export default function LanUrlBadge() {
       </div>
       <QRCodeModal
         show={qrModalMode === 'results'}
-        onClose={() => setQrModalMode(null)}
+        onClose={closeQr}
         mode="results"
       />
       <QRCodeModal
         show={qrModalMode === 'squads'}
-        onClose={() => setQrModalMode(null)}
+        onClose={closeQr}
         mode="squads"
       />
       <ScorerTrustModal
         show={showTrustModal}
-        onClose={() => setShowTrustModal(false)}
+        onClose={closeTrust}
       />
     </>
   );

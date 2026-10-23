@@ -1,21 +1,7 @@
 import { Button } from 'flowbite-react';
 import { useTranslation } from 'react-i18next';
 import { TbTrash, TbLink, TbUnlink } from "react-icons/tb";
-
-interface BulkActionToolbarProps {
-  selectedCount: number;
-  onEdit?: () => void;
-  onCreate?: () => void;
-  onDelete: () => void;
-  onClearSelection: () => void;
-  editLabel?: string;
-  createLabel?: string;
-  deleteLabel?: string;
-  onGroup?: () => void;
-  onUngroup?: () => void;
-  showGroup?: boolean;
-  showUngroup?: boolean;
-}
+import type { BulkActionToolbarProps } from './types';
 
 /** Floating toolbar shown when items are selected. Displays count and action buttons. */
 export default function BulkActionToolbar({

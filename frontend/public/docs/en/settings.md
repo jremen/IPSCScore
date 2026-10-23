@@ -2,7 +2,7 @@
 
 ![Settings modal](/docs/screenshots/settings-modal.png)
 
-The Settings modal (⚙️ icon in the header, admin only) lets you configure the app's language, appearance, and admin password.
+The Settings modal (⚙️ icon in the header, admin only) lets you configure the app's language and appearance, change the admin password, manage database backups, and open the audit log.
 
 ## Language
 
@@ -25,6 +25,10 @@ The default admin password is `admin`. To change it:
 3. **Confirm** the new password.
 
 The password is hashed on the server. Changing it does not affect admin sessions that are already logged in — it only applies to future logins.
+
+## Database
+
+The **Database** panel exports and imports full database backups. In the Electron desktop app it also configures the backup folder and automatic backups. See [Database & backups](database.md) for formats, schedules, and restore steps.
 
 ## Audit log
 

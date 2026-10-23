@@ -1,12 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import type { Stage } from '../../types/stage';
 import { useEscClose } from '../../hooks/useEscClose';
-
-interface StageDetailsViewProps {
-  show: boolean;
-  onClose: () => void;
-  stage: Stage | null;
-}
+import type { StageDetailsViewProps } from './types';
 
 /**
  * Fullscreen read-only stage details view used by the /scoring scoring view.
