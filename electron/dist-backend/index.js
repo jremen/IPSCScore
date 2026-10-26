@@ -12275,9 +12275,9 @@ var require_load = __commonJS({
 var require_lib3 = __commonJS({
   "../node_modules/jszip/lib/index.js"(exports2, module) {
     "use strict";
-    function JSZip3() {
-      if (!(this instanceof JSZip3)) {
-        return new JSZip3();
+    function JSZip4() {
+      if (!(this instanceof JSZip4)) {
+        return new JSZip4();
       }
       if (arguments.length) {
         throw new Error("The constructor with parameters has been removed in JSZip 3.0, please check the upgrade guide.");
@@ -12286,7 +12286,7 @@ var require_lib3 = __commonJS({
       this.comment = null;
       this.root = "";
       this.clone = function() {
-        var newObj = new JSZip3();
+        var newObj = new JSZip4();
         for (var i in this) {
           if (typeof this[i] !== "function") {
             newObj[i] = this[i];
@@ -12295,16 +12295,16 @@ var require_lib3 = __commonJS({
         return newObj;
       };
     }
-    JSZip3.prototype = require_object();
-    JSZip3.prototype.loadAsync = require_load();
-    JSZip3.support = require_support();
-    JSZip3.defaults = require_defaults();
-    JSZip3.version = "3.10.1";
-    JSZip3.loadAsync = function(content, options) {
-      return new JSZip3().loadAsync(content, options);
+    JSZip4.prototype = require_object();
+    JSZip4.prototype.loadAsync = require_load();
+    JSZip4.support = require_support();
+    JSZip4.defaults = require_defaults();
+    JSZip4.version = "3.10.1";
+    JSZip4.loadAsync = function(content, options) {
+      return new JSZip4().loadAsync(content, options);
     };
-    JSZip3.external = require_external();
-    module.exports = JSZip3;
+    JSZip4.external = require_external();
+    module.exports = JSZip4;
   }
 });
 
@@ -13390,7 +13390,7 @@ var HonoRequest = class {
    * ```
    */
   json() {
-    return this.#cachedBody("text").then((text) => JSON.parse(text));
+    return this.#cachedBody("text").then((text2) => JSON.parse(text2));
   }
   /**
    * `.text()` can parse Request body of type `text/plain`
@@ -13936,9 +13936,9 @@ var Context = class {
    * })
    * ```
    */
-  text = (text, arg, headers) => {
-    return !this.#preparedHeaders && !this.#status && !arg && !headers && !this.finalized ? new Response(text) : this.#newResponse(
-      text,
+  text = (text2, arg, headers) => {
+    return !this.#preparedHeaders && !this.#status && !arg && !headers && !this.finalized ? new Response(text2) : this.#newResponse(
+      text2,
       arg,
       setDefaultContentType(TEXT_PLAIN, headers)
     );
@@ -16829,6 +16829,145 @@ var EventBroadcaster = class {
 };
 var eventBroadcaster = new EventBroadcaster();
 
+// ../backend/src/services/scoringRecalc.ts
+init_client();
+
+// ../backend/src/utils/stageRanking.ts
+function stageRankingMode(scoringType) {
+  switch (scoringType) {
+    case "comstock":
+    case "virginia":
+    case "hit_factor":
+      return "hit_factor";
+    case "fixed_time":
+    case "bullseye":
+    case "archery":
+    case "issf":
+    case "long_range":
+    case "nrl22":
+      return "net_points";
+    case "idpa":
+    case "action_steel":
+    case "multi_gun":
+      return "time";
+    default:
+      return "none";
+  }
+}
+
+// ../backend/src/services/scoringRecalc.ts
+async function recalculateStage(_matchId, stageId) {
+  const [stage] = await sql`SELECT * FROM stages WHERE id = ${stageId}`;
+  const scoringType = stage.scoring_type;
+  const maxPoints = Number(stage.max_points);
+  const mode = stageRankingMode(scoringType);
+  await sql.begin(async (sql2) => {
+    if (mode === "hit_factor") {
+      await sql2`
+        WITH ranked AS (
+          SELECT ss.id,
+            ROUND(CASE WHEN best.best_hf <= 0 THEN 0
+                 ELSE (ss.hit_factor / best.best_hf) * 100 END, 4) as stage_percent,
+            ROUND(CASE WHEN best.best_hf <= 0 THEN 0
+                 ELSE (ss.hit_factor / best.best_hf) * ${maxPoints} END, 2) as stage_points
+          FROM stage_scores ss
+          JOIN match_registrations mr ON mr.id = ss.registration_id
+          JOIN shooters s ON s.id = mr.shooter_id
+          CROSS JOIN LATERAL (
+            SELECT MAX(ss2.hit_factor) as best_hf
+            FROM stage_scores ss2
+            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
+            JOIN shooters s2 ON s2.id = mr2.shooter_id
+            WHERE ss2.stage_id = ${stageId}
+              AND mr2.is_dq = FALSE
+              AND ss2.is_dnf = FALSE
+              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
+          ) best
+          WHERE ss.stage_id = ${stageId}
+            AND mr.is_dq = FALSE
+            AND ss.is_dnf = FALSE
+        )
+        UPDATE stage_scores ss
+        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
+        FROM ranked
+        WHERE ss.id = ranked.id
+      `;
+    } else if (mode === "net_points") {
+      await sql2`
+        WITH ranked AS (
+          SELECT ss.id,
+            ROUND(CASE WHEN best.best_np <= 0 THEN 0
+                 ELSE (ss.net_points / best.best_np) * 100 END, 4) as stage_percent,
+            ROUND(CASE WHEN best.best_np <= 0 THEN 0
+                 ELSE (ss.net_points / best.best_np) * ${maxPoints} END, 2) as stage_points
+          FROM stage_scores ss
+          JOIN match_registrations mr ON mr.id = ss.registration_id
+          JOIN shooters s ON s.id = mr.shooter_id
+          CROSS JOIN LATERAL (
+            SELECT MAX(ss2.net_points) as best_np
+            FROM stage_scores ss2
+            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
+            JOIN shooters s2 ON s2.id = mr2.shooter_id
+            WHERE ss2.stage_id = ${stageId}
+              AND mr2.is_dq = FALSE
+              AND ss2.is_dnf = FALSE
+              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
+          ) best
+          WHERE ss.stage_id = ${stageId}
+            AND mr.is_dq = FALSE
+            AND ss.is_dnf = FALSE
+        )
+        UPDATE stage_scores ss
+        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
+        FROM ranked
+        WHERE ss.id = ranked.id
+      `;
+    } else if (mode === "time") {
+      await sql2`
+        WITH ranked AS (
+          SELECT ss.id,
+            ROUND(CASE WHEN best.lowest_time <= 0 OR ss.total_time <= 0 THEN 0
+                 ELSE (best.lowest_time / ss.total_time) * 100 END, 4) as stage_percent,
+            ROUND(CASE WHEN best.lowest_time <= 0 OR ss.total_time <= 0 THEN 0
+                 ELSE (best.lowest_time / ss.total_time) * ${maxPoints} END, 2) as stage_points
+          FROM stage_scores ss
+          JOIN match_registrations mr ON mr.id = ss.registration_id
+          JOIN shooters s ON s.id = mr.shooter_id
+          CROSS JOIN LATERAL (
+            SELECT MIN(ss2.total_time) as lowest_time
+            FROM stage_scores ss2
+            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
+            JOIN shooters s2 ON s2.id = mr2.shooter_id
+            WHERE ss2.stage_id = ${stageId}
+              AND mr2.is_dq = FALSE
+              AND ss2.is_dnf = FALSE
+              AND ss2.total_time > 0
+              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
+          ) best
+          WHERE ss.stage_id = ${stageId}
+            AND mr.is_dq = FALSE
+            AND ss.is_dnf = FALSE
+        )
+        UPDATE stage_scores ss
+        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
+        FROM ranked
+        WHERE ss.id = ranked.id
+      `;
+    }
+    await sql2`
+      UPDATE stage_scores ss
+      SET stage_points = 0, stage_percent = 0
+      FROM match_registrations mr
+      WHERE ss.registration_id = mr.id AND ss.stage_id = ${stageId} AND mr.is_dq = TRUE
+    `;
+    await sql2`
+      UPDATE stage_scores
+      SET stage_points = 0, stage_percent = 0
+      WHERE stage_id = ${stageId} AND is_dnf = TRUE
+    `;
+  });
+}
+
 // ../backend/src/services/localBackup.ts
 init_client();
 import { gzipSync, gunzipSync } from "node:zlib";
@@ -17614,177 +17753,6 @@ scoringRoutes.post("/matches/:matchId/recalculate", async (c) => {
   await audit(c, "score.recalculate-match", `matches:${matchId}`, { stage_count: stages.length });
   return c.json({ recalculated: true, stage_count: stages.length });
 });
-async function recalculateStage(matchId, stageId) {
-  const [stage] = await sql`SELECT * FROM stages WHERE id = ${stageId}`;
-  const stageConfig = typeof stage.config === "string" ? JSON.parse(stage.config) : stage.config || {};
-  const scoringType = stage.scoring_type;
-  const maxPoints = Number(stage.max_points);
-  await sql.begin(async (sql2) => {
-    if (["comstock", "virginia", "hit_factor"].includes(scoringType)) {
-      await sql2`
-        WITH ranked AS (
-          SELECT ss.id,
-            ROUND(CASE WHEN best.best_hf <= 0 THEN 0
-                 ELSE (ss.hit_factor / best.best_hf) * 100 END, 4) as stage_percent,
-            ROUND(CASE WHEN best.best_hf <= 0 THEN 0
-                 ELSE (ss.hit_factor / best.best_hf) * ${maxPoints} END, 2) as stage_points
-          FROM stage_scores ss
-          JOIN match_registrations mr ON mr.id = ss.registration_id
-          JOIN shooters s ON s.id = mr.shooter_id
-          CROSS JOIN LATERAL (
-            SELECT MAX(ss2.hit_factor) as best_hf
-            FROM stage_scores ss2
-            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
-            JOIN shooters s2 ON s2.id = mr2.shooter_id
-            WHERE ss2.stage_id = ${stageId}
-              AND mr2.is_dq = FALSE
-              AND ss2.is_dnf = FALSE
-              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
-          ) best
-          WHERE ss.stage_id = ${stageId}
-            AND mr.is_dq = FALSE
-            AND ss.is_dnf = FALSE
-        )
-        UPDATE stage_scores ss
-        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
-        FROM ranked
-        WHERE ss.id = ranked.id
-      `;
-    } else if (scoringType === "fixed_time") {
-      await sql2`
-        WITH ranked AS (
-          SELECT ss.id,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * 100 END, 4) as stage_percent,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * ${maxPoints} END, 2) as stage_points
-          FROM stage_scores ss
-          JOIN match_registrations mr ON mr.id = ss.registration_id
-          JOIN shooters s ON s.id = mr.shooter_id
-          CROSS JOIN LATERAL (
-            SELECT MAX(ss2.net_points) as best_np
-            FROM stage_scores ss2
-            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
-            JOIN shooters s2 ON s2.id = mr2.shooter_id
-            WHERE ss2.stage_id = ${stageId}
-              AND mr2.is_dq = FALSE
-              AND ss2.is_dnf = FALSE
-              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
-          ) best
-          WHERE ss.stage_id = ${stageId}
-            AND mr.is_dq = FALSE
-            AND ss.is_dnf = FALSE
-        )
-        UPDATE stage_scores ss
-        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
-        FROM ranked
-        WHERE ss.id = ranked.id
-      `;
-    } else if (["idpa", "action_steel", "multi_gun"].includes(scoringType)) {
-      await sql2`
-        WITH ranked AS (
-          SELECT ss.id,
-            ROUND(CASE WHEN best.lowest_time <= 0 OR ss.total_time <= 0 THEN 0
-                 ELSE (best.lowest_time / ss.total_time) * 100 END, 4) as stage_percent,
-            ROUND(CASE WHEN best.lowest_time <= 0 OR ss.total_time <= 0 THEN 0
-                 ELSE (best.lowest_time / ss.total_time) * ${maxPoints} END, 2) as stage_points
-          FROM stage_scores ss
-          JOIN match_registrations mr ON mr.id = ss.registration_id
-          JOIN shooters s ON s.id = mr.shooter_id
-          CROSS JOIN LATERAL (
-            SELECT MIN(ss2.total_time) as lowest_time
-            FROM stage_scores ss2
-            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
-            JOIN shooters s2 ON s2.id = mr2.shooter_id
-            WHERE ss2.stage_id = ${stageId}
-              AND mr2.is_dq = FALSE
-              AND ss2.is_dnf = FALSE
-              AND ss2.total_time > 0
-              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
-          ) best
-          WHERE ss.stage_id = ${stageId}
-            AND mr.is_dq = FALSE
-            AND ss.is_dnf = FALSE
-        )
-        UPDATE stage_scores ss
-        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
-        FROM ranked
-        WHERE ss.id = ranked.id
-      `;
-    } else if (["bullseye", "archery", "issf"].includes(scoringType) || scoringType === "long_range" && stageConfig.variant === "f_class") {
-      await sql2`
-        WITH ranked AS (
-          SELECT ss.id,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * 100 END, 4) as stage_percent,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * ${maxPoints} END, 2) as stage_points
-          FROM stage_scores ss
-          JOIN match_registrations mr ON mr.id = ss.registration_id
-          JOIN shooters s ON s.id = mr.shooter_id
-          CROSS JOIN LATERAL (
-            SELECT MAX(ss2.net_points) as best_np
-            FROM stage_scores ss2
-            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
-            JOIN shooters s2 ON s2.id = mr2.shooter_id
-            WHERE ss2.stage_id = ${stageId}
-              AND mr2.is_dq = FALSE
-              AND ss2.is_dnf = FALSE
-              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
-          ) best
-          WHERE ss.stage_id = ${stageId}
-            AND mr.is_dq = FALSE
-            AND ss.is_dnf = FALSE
-        )
-        UPDATE stage_scores ss
-        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
-        FROM ranked
-        WHERE ss.id = ranked.id
-      `;
-    } else if (["nrl22"].includes(scoringType) || scoringType === "long_range" && stageConfig.variant !== "f_class") {
-      await sql2`
-        WITH ranked AS (
-          SELECT ss.id,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * 100 END, 4) as stage_percent,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * ${maxPoints} END, 2) as stage_points
-          FROM stage_scores ss
-          JOIN match_registrations mr ON mr.id = ss.registration_id
-          JOIN shooters s ON s.id = mr.shooter_id
-          CROSS JOIN LATERAL (
-            SELECT MAX(ss2.net_points) as best_np
-            FROM stage_scores ss2
-            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
-            JOIN shooters s2 ON s2.id = mr2.shooter_id
-            WHERE ss2.stage_id = ${stageId}
-              AND mr2.is_dq = FALSE
-              AND ss2.is_dnf = FALSE
-              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
-          ) best
-          WHERE ss.stage_id = ${stageId}
-            AND mr.is_dq = FALSE
-            AND ss.is_dnf = FALSE
-        )
-        UPDATE stage_scores ss
-        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
-        FROM ranked
-        WHERE ss.id = ranked.id
-      `;
-    }
-    await sql2`
-      UPDATE stage_scores ss
-      SET stage_points = 0, stage_percent = 0
-      FROM match_registrations mr
-      WHERE ss.registration_id = mr.id AND ss.stage_id = ${stageId} AND mr.is_dq = TRUE
-    `;
-    await sql2`
-      UPDATE stage_scores
-      SET stage_points = 0, stage_percent = 0
-      WHERE stage_id = ${stageId} AND is_dnf = TRUE
-    `;
-  });
-}
 
 // ../backend/src/routes/results.ts
 init_client();
@@ -17852,6 +17820,79 @@ function parseJsonValue(value) {
     }
   }
   return value;
+}
+
+// ../backend/src/services/combinedResults.ts
+init_client();
+function num(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+function round(value, decimals) {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+function stagePointsFor(mode, value, best, maxPoints) {
+  if (best <= 0) return 0;
+  if (mode === "time" && value <= 0) return 0;
+  const ratio = mode === "time" ? best / value : value / best;
+  return round(ratio * maxPoints, 2);
+}
+function stageValue(mode, score) {
+  switch (mode) {
+    case "hit_factor":
+      return num(score.hit_factor);
+    case "net_points":
+      return num(score.net_points);
+    case "time":
+      return num(score.total_time);
+    default:
+      return 0;
+  }
+}
+function bestValue(mode, scores) {
+  const values2 = scores.map((score) => stageValue(mode, score)).filter((value) => mode === "time" ? value > 0 : value >= 0);
+  if (values2.length === 0) return 0;
+  return mode === "time" ? Math.min(...values2) : Math.max(...values2);
+}
+async function loadCombinedMatchPoints(matchId) {
+  const stages = await sql`
+    SELECT id, scoring_type, max_points FROM stages WHERE match_id = ${matchId}
+  `;
+  if (stages.length === 0) return /* @__PURE__ */ new Map();
+  const scores = await sql`
+    SELECT ss.stage_id, ss.registration_id, ss.hit_factor, ss.net_points,
+           ss.total_time, ss.stage_points, ss.is_dnf, mr.is_dq
+    FROM stage_scores ss
+    JOIN match_registrations mr ON mr.id = ss.registration_id
+    WHERE ss.match_id = ${matchId}
+  `;
+  if (scores.length === 0) return /* @__PURE__ */ new Map();
+  const stageById = new Map(stages.map((stage) => [stage.id, stage]));
+  const scoresByStage = /* @__PURE__ */ new Map();
+  for (const score of scores) {
+    const bucket = scoresByStage.get(score.stage_id);
+    if (bucket) bucket.push(score);
+    else scoresByStage.set(score.stage_id, [score]);
+  }
+  const totals = /* @__PURE__ */ new Map();
+  for (const [stageId, stageScores] of scoresByStage) {
+    const stage = stageById.get(stageId);
+    if (!stage) continue;
+    const mode = stageRankingMode(stage.scoring_type);
+    const maxPoints = num(stage.max_points);
+    const eligible = stageScores.filter((score) => !score.is_dq && !score.is_dnf);
+    const best = mode === "none" ? 0 : bestValue(mode, eligible);
+    for (const score of stageScores) {
+      if (score.is_dq || score.is_dnf) continue;
+      const contribution = mode === "none" ? num(score.stage_points) : stagePointsFor(mode, stageValue(mode, score), best, maxPoints);
+      totals.set(score.registration_id, (totals.get(score.registration_id) ?? 0) + contribution);
+    }
+  }
+  for (const [registrationId, total] of totals) {
+    totals.set(registrationId, round(total, 2));
+  }
+  return totals;
 }
 
 // ../backend/src/routes/results.ts
@@ -18046,8 +18087,15 @@ function decorateMatchRow(row, context) {
     position: 0
   };
 }
-function prepareMatchRows(rows, context, isDq) {
-  const decorated = rows.map((row) => decorateMatchRow(row, context));
+function prepareMatchRows(rows, context, isDq, combinedPoints) {
+  const decorated = rows.map((row) => {
+    const result = decorateMatchRow(row, context);
+    const combined = combinedPoints?.get(row.registration_id);
+    if (!isDq && combined != null) {
+      result.match_points = combined;
+    }
+    return result;
+  });
   if (!isDq) {
     decorated.sort((a, b2) => b2.match_points - a.match_points);
   }
@@ -18077,8 +18125,9 @@ function groupAndRank(rows, divisionApplies) {
 resultsRoutes.get("/matches/:matchId/results/overall", async (c) => {
   const matchId = c.req.param("matchId");
   const context = await loadMatchContext(matchId);
+  const combined = context.meta.profile === "zone" && context.divisionApplies ? await loadCombinedMatchPoints(matchId) : null;
   const results = await runMatchQuery(matchId, false);
-  const ranked = rankGroup(prepareMatchRows(results, context, false));
+  const ranked = rankGroup(prepareMatchRows(results, context, false, combined));
   const dq = await runMatchQuery(matchId, true);
   const dqRanked = prepareMatchRows(dq, context, true);
   return c.json({ results: ranked, dq: dqRanked });
@@ -19965,8 +20014,8 @@ function parseCSVOptions(body) {
   }
   return { hasHeader, columnMapping };
 }
-function detectDelimiter(text) {
-  const lines = text.split("\n").slice(0, 5).filter((l) => l.trim());
+function detectDelimiter(text2) {
+  const lines = text2.split("\n").slice(0, 5).filter((l) => l.trim());
   let semicolons = 0;
   let commas = 0;
   for (const line of lines) {
@@ -19975,10 +20024,10 @@ function detectDelimiter(text) {
   }
   return semicolons > commas ? ";" : ",";
 }
-function parseCSV(text, hasHeader, columnMapping) {
-  const delimiter = detectDelimiter(text);
+function parseCSV(text2, hasHeader, columnMapping) {
+  const delimiter = detectDelimiter(text2);
   if (hasHeader) {
-    const records = parse2(text, { columns: true, skip_empty_lines: true, trim: true, delimiter });
+    const records = parse2(text2, { columns: true, skip_empty_lines: true, trim: true, delimiter });
     if (columnMapping && Object.keys(columnMapping).length > 0) {
       return records.map((row) => {
         const mapped = {};
@@ -19997,7 +20046,7 @@ function parseCSV(text, hasHeader, columnMapping) {
     }
     return records;
   } else {
-    const records = parse2(text, { skip_empty_lines: true, trim: true, delimiter });
+    const records = parse2(text2, { skip_empty_lines: true, trim: true, delimiter });
     if (columnMapping && Object.keys(columnMapping).length > 0) {
       const expectedFields = Object.keys(columnMapping);
       return records.map((row) => {
@@ -20025,8 +20074,8 @@ importRoutes.post("/shooters", async (c) => {
   }
   const { hasHeader, columnMapping } = parseCSVOptions(body);
   const updateIfExists = body["updateIfExists"] !== "false";
-  const text = await file.text();
-  const records = parseCSV(text, hasHeader, columnMapping);
+  const text2 = await file.text();
+  const records = parseCSV(text2, hasHeader, columnMapping);
   let imported = 0;
   let updated = 0;
   let skipped = 0;
@@ -20096,8 +20145,8 @@ importRoutes.post("/matches/:matchId/registrations", async (c) => {
     return c.json({ error: "No CSV file provided" }, 400);
   }
   const { hasHeader, columnMapping } = parseCSVOptions(body);
-  const text = await file.text();
-  const records = parseCSV(text, hasHeader, columnMapping);
+  const text2 = await file.text();
+  const records = parseCSV(text2, hasHeader, columnMapping);
   let imported = 0;
   let skipped = 0;
   const errors = [];
@@ -20157,8 +20206,8 @@ importRoutes.post("/matches/:matchId/scores", async (c) => {
     return c.json({ error: "No CSV file provided" }, 400);
   }
   const { hasHeader, columnMapping } = parseCSVOptions(body);
-  const text = await file.text();
-  const records = parseCSV(text, hasHeader, columnMapping);
+  const text2 = await file.text();
+  const records = parseCSV(text2, hasHeader, columnMapping);
   let imported = 0;
   let skipped = 0;
   const errors = [];
@@ -22918,23 +22967,23 @@ function toNumber(str, options = {}) {
       if (!options.leadingZeros && (leadingZeros.length > 1 || leadingZeros.length === 1 && !decimalAdjacentToLeadingZeros)) {
         return str;
       } else {
-        const num2 = Number(trimmedStr);
-        const parsedStr = String(num2);
-        if (num2 === 0) return num2;
+        const num3 = Number(trimmedStr);
+        const parsedStr = String(num3);
+        if (num3 === 0) return num3;
         if (parsedStr.search(/[eE]/) !== -1) {
-          if (options.eNotation) return num2;
+          if (options.eNotation) return num3;
           else return str;
         } else if (trimmedStr.indexOf(".") !== -1) {
-          if (parsedStr === "0") return num2;
-          else if (parsedStr === numTrimmedByZeros) return num2;
-          else if (parsedStr === `${sign}${numTrimmedByZeros}`) return num2;
+          if (parsedStr === "0") return num3;
+          else if (parsedStr === numTrimmedByZeros) return num3;
+          else if (parsedStr === `${sign}${numTrimmedByZeros}`) return num3;
           else return str;
         }
         let n = leadingZeros ? numTrimmedByZeros : trimmedStr;
         if (leadingZeros) {
-          return n === parsedStr || sign + n === parsedStr ? num2 : str;
+          return n === parsedStr || sign + n === parsedStr ? num3 : str;
         } else {
-          return n === parsedStr || n === sign + parsedStr ? num2 : str;
+          return n === parsedStr || n === sign + parsedStr ? num3 : str;
         }
       }
     } else {
@@ -22987,13 +23036,13 @@ function parse_int(numStr, base) {
   else if (window && window.parseInt) return window.parseInt(numStr, base);
   else throw new Error("parseInt, Number.parseInt, window.parseInt are not supported");
 }
-function handleInfinity(str, num2, options) {
-  const isPositive = num2 === Infinity;
+function handleInfinity(str, num3, options) {
+  const isPositive = num3 === Infinity;
   switch (options.infinity.toLowerCase()) {
     case "null":
       return null;
     case "infinity":
-      return num2;
+      return num3;
     // Return Infinity or -Infinity
     case "string":
       return isPositive ? "Infinity" : "-Infinity";
@@ -24392,7 +24441,7 @@ function prettify(node, options, matcher, readonlyMatcher) {
   return compress(node, options, matcher, readonlyMatcher);
 }
 function compress(arr, options, matcher, readonlyMatcher) {
-  let text;
+  let text2;
   const compressedObj = {};
   for (let i = 0; i < arr.length; i++) {
     const tagObj = arr[i];
@@ -24405,8 +24454,8 @@ function compress(arr, options, matcher, readonlyMatcher) {
       matcher.push(property, rawAttrs);
     }
     if (property === options.textNodeName) {
-      if (text === void 0) text = tagObj[property];
-      else text += "" + tagObj[property];
+      if (text2 === void 0) text2 = tagObj[property];
+      else text2 += "" + tagObj[property];
     } else if (property === void 0) {
       continue;
     } else if (tagObj[property]) {
@@ -24444,9 +24493,9 @@ function compress(arr, options, matcher, readonlyMatcher) {
       }
     }
   }
-  if (typeof text === "string") {
-    if (text.length > 0) compressedObj[options.textNodeName] = text;
-  } else if (text !== void 0) compressedObj[options.textNodeName] = text;
+  if (typeof text2 === "string") {
+    if (text2.length > 0) compressedObj[options.textNodeName] = text2;
+  } else if (text2 !== void 0) compressedObj[options.textNodeName] = text2;
   return compressedObj;
 }
 function propName(obj) {
@@ -25978,19 +26027,26 @@ init_client();
 var WINMSS_DIVISION_MAP = {
   1: "open",
   2: "standard",
-  3: "modified",
-  // WinMSS id 3 = Modified (not used in IPSCScore, map to open)
+  3: "open",
+  // WinMSS Modified is not an IPSCScore division; map to Open
   4: "production",
   5: "revolver",
   18: "classic",
-  24: "production_optics"
+  24: "production_optics",
+  // PCC / Optics divisions used by current WinMSS exports.
+  29: "pcc_optics",
+  31: "pcc_iron",
+  // Not present in older tblTypeDivision exports but used by current matches.
+  50: "optics"
 };
 var WINMSS_CATEGORY_MAP = {
   0: "regular",
   1: "lady",
   2: "junior",
   3: "senior",
-  4: "super_senior"
+  4: "super_senior",
+  5: "junior"
+  // WinMSS "S. Junior" — IPSCScore has no separate super-junior category
 };
 var WINMSS_POWER_FACTOR_MAP = {
   1: "major",
@@ -26000,8 +26056,14 @@ var WINMSS_FIREARM_MAP = {
   1: "handgun",
   2: "rifle",
   3: "shotgun",
-  4: "pcc"
+  4: "pcc",
   // WinMSS PCC → IPSCScore pcc (no pcc_optics/pcc_iron distinction)
+  5: "handgun",
+  // Action Air
+  6: "rifle",
+  // Mini-Rifle
+  7: "pcc"
+  // Pistol Caliber Carbine
 };
 var TABLE_ALIASES = {
   match: ["tblMatch", "Match", "Matches", "Competitions"],
@@ -26175,6 +26237,11 @@ function buildRegionLookup(rows) {
 }
 function mapDivisionNameToId(name) {
   const lower = name.toLowerCase().trim();
+  if (lower.includes("pcc") || lower.includes("pc optic") || lower.includes("pc iron")) {
+    if (lower.includes("iron")) return "pcc_iron";
+    if (lower.includes("optic")) return "pcc_optics";
+  }
+  if (lower === "optics" || lower === "optic") return "optics";
   if (lower.includes("open") || lower.includes("standard") && lower.includes("open")) return "open";
   if (lower === "standard" || lower === "std") return "standard";
   if (lower.includes("production") && lower.includes("optics")) return "production_optics";
@@ -26188,7 +26255,9 @@ function mapCategoryName(name) {
   const lower = name.toLowerCase().trim();
   if (lower.includes("lady") || lower.includes("women") || lower.includes("female")) return "lady";
   if (lower.includes("super senior") || lower.includes("super_senior") || lower === "ss") return "super_senior";
+  if (lower.includes("s. senior") || lower.includes("s senior")) return "super_senior";
   if (lower.includes("senior") || lower === "s") return "senior";
+  if (lower.includes("s. junior") || lower.includes("s junior")) return "junior";
   if (lower.includes("junior") || lower === "j") return "junior";
   if (lower.includes("regular") || lower.includes("general") || lower === "r" || lower === "open") return "regular";
   return null;
@@ -26243,15 +26312,1134 @@ function inferHitsPerPaper() {
 
 // ../backend/src/routes/winmssImport.ts
 init_scoringCalc();
+
+// ../backend/src/utils/winmssCabParser.ts
+var import_jszip = __toESM(require_lib3(), 1);
+
+// ../backend/src/utils/cabArchive.ts
+import { inflateRawSync } from "node:zlib";
+var CAB_SIGNATURE = "MSCF";
+var FLAG_RESERVE_PRESENT = 4;
+var ATTR_NAME_IS_UTF = 128;
+var COMPRESSION_NONE = 0;
+var COMPRESSION_MSZIP = 1;
+function readU16(buffer2, offset) {
+  if (offset + 2 > buffer2.length) throw new Error("CAB file is truncated");
+  return buffer2.readUInt16LE(offset);
+}
+function readU32(buffer2, offset) {
+  if (offset + 4 > buffer2.length) throw new Error("CAB file is truncated");
+  return buffer2.readUInt32LE(offset);
+}
+function readU8(buffer2, offset) {
+  if (offset + 1 > buffer2.length) throw new Error("CAB file is truncated");
+  return buffer2.readUInt8(offset);
+}
+function readFolderData(buffer2, startOffset, blockCount, compression, dataReserveSize) {
+  const chunks = [];
+  let dictionary = Buffer.alloc(0);
+  let offset = startOffset;
+  for (let i = 0; i < blockCount; i++) {
+    const checksum = readU32(buffer2, offset);
+    void checksum;
+    const cbData = readU16(buffer2, offset + 4);
+    const cbUncomp = readU16(buffer2, offset + 6);
+    const dataStart = offset + 8 + dataReserveSize;
+    const dataEnd = dataStart + cbData;
+    if (dataEnd > buffer2.length) throw new Error("CAB data block is truncated");
+    const compressed = buffer2.subarray(dataStart, dataEnd);
+    let output;
+    if (compression === COMPRESSION_NONE) {
+      output = compressed;
+    } else if (compression === COMPRESSION_MSZIP) {
+      if (compressed.length < 2 || compressed[0] !== 67 || compressed[1] !== 75) {
+        throw new Error("Invalid MSZIP block signature in CAB");
+      }
+      const payload = compressed.subarray(2);
+      try {
+        output = inflateRawSync(payload, dictionary.length > 0 ? { dictionary } : void 0);
+      } catch (err) {
+        if (dictionary.length === 0) throw err;
+        output = inflateRawSync(payload);
+      }
+    } else {
+      throw new Error(
+        `Unsupported CAB compression type ${compression}. WinMSS CABs must be uncompressed or MSZIP.`
+      );
+    }
+    if (cbUncomp !== 0 && output.length !== cbUncomp) {
+      throw new Error(`CAB block decompressed to ${output.length} bytes, expected ${cbUncomp}`);
+    }
+    chunks.push(output);
+    const combined = Buffer.concat([dictionary, output]);
+    dictionary = combined.length > 32768 ? combined.subarray(combined.length - 32768) : combined;
+    offset = dataEnd;
+  }
+  return Buffer.concat(chunks);
+}
+function extractCabEntries(buffer2) {
+  if (buffer2.length < 36 || buffer2.subarray(0, 4).toString("ascii") !== CAB_SIGNATURE) {
+    throw new Error("Not a Microsoft Cabinet (MSCF) archive");
+  }
+  const coffFiles = readU32(buffer2, 16);
+  const versionMinor = readU8(buffer2, 24);
+  const versionMajor = readU8(buffer2, 25);
+  void versionMinor;
+  void versionMajor;
+  const cFolders = readU16(buffer2, 26);
+  const cFiles = readU16(buffer2, 28);
+  const flags = readU16(buffer2, 30);
+  let headerEnd = 36;
+  let folderReserveSize = 0;
+  let dataReserveSize = 0;
+  if (flags & FLAG_RESERVE_PRESENT) {
+    const cbCFHeader = readU16(buffer2, 36);
+    folderReserveSize = readU8(buffer2, 38);
+    dataReserveSize = readU8(buffer2, 39);
+    headerEnd = 40 + cbCFHeader;
+  }
+  const folderEntrySize = 8 + folderReserveSize;
+  const folders = [];
+  for (let i = 0; i < cFolders; i++) {
+    const offset2 = headerEnd + i * folderEntrySize;
+    folders.push({
+      dataStart: readU32(buffer2, offset2),
+      blockCount: readU16(buffer2, offset2 + 4),
+      compression: readU16(buffer2, offset2 + 6) & 15
+    });
+  }
+  const folderData = folders.map(
+    (folder) => readFolderData(buffer2, folder.dataStart, folder.blockCount, folder.compression, dataReserveSize)
+  );
+  const entries = [];
+  let offset = coffFiles;
+  for (let i = 0; i < cFiles; i++) {
+    const cbFile = readU32(buffer2, offset);
+    const folderOffset = readU32(buffer2, offset + 4);
+    const folderIndex = readU16(buffer2, offset + 8);
+    const attribs = readU16(buffer2, offset + 14);
+    const nameStart = offset + 16;
+    let nameEnd = nameStart;
+    while (nameEnd < buffer2.length && buffer2[nameEnd] !== 0) nameEnd++;
+    if (nameEnd >= buffer2.length) throw new Error("CAB file name is truncated");
+    const nameBytes = buffer2.subarray(nameStart, nameEnd);
+    const name = attribs & ATTR_NAME_IS_UTF ? nameBytes.toString("utf8") : nameBytes.toString("latin1");
+    const folder = folderData[folderIndex];
+    if (!folder) throw new Error(`CAB file "${name}" references missing folder ${folderIndex}`);
+    if (folderOffset + cbFile > folder.length) {
+      throw new Error(`CAB file "${name}" extends beyond its folder data`);
+    }
+    entries.push({
+      name: name.replace(/\\/g, "/"),
+      data: folder.subarray(folderOffset, folderOffset + cbFile)
+    });
+    offset = nameEnd + 1;
+  }
+  return entries;
+}
+function isMicrosoftCab(buffer2) {
+  return buffer2.length >= 4 && buffer2.subarray(0, 4).toString("ascii") === CAB_SIGNATURE;
+}
+function isZipArchive(buffer2) {
+  return buffer2.length >= 4 && buffer2[0] === 80 && buffer2[1] === 75;
+}
+
+// ../backend/src/utils/winmssCabParser.ts
+var WinMssCabParseError = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "WinMssCabParseError";
+  }
+};
+var REQUIRED_FILES = ["THEMATCH.XML", "MEMBER.XML", "ENROLLED.XML", "STAGE.XML", "SCORE.XML"];
+var ENTITY_MAP = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'"
+};
+function decodeXmlEntities(value) {
+  return value.replace(/&(#[xX]?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match2, code) => {
+    if (code.startsWith("#")) {
+      const hex = code[1]?.toLowerCase() === "x";
+      const parsed = parseInt(code.slice(hex ? 2 : 1), hex ? 16 : 10);
+      return Number.isFinite(parsed) ? String.fromCodePoint(parsed) : match2;
+    }
+    return ENTITY_MAP[code] ?? match2;
+  });
+}
+function parseWinMssCabRows(xml) {
+  const rows = [];
+  const tagPattern = /<z:row\b/gi;
+  const attrPattern = /([A-Za-z_][\w.:-]*)\s*=\s*(['"])([\s\S]*?)\2/g;
+  let tagMatch;
+  while ((tagMatch = tagPattern.exec(xml)) !== null) {
+    let cursor = tagPattern.lastIndex;
+    let quote = null;
+    while (cursor < xml.length) {
+      const char = xml[cursor];
+      if (quote) {
+        if (char === quote) quote = null;
+      } else if (char === "'" || char === '"') {
+        quote = char;
+      } else if (char === ">") {
+        break;
+      }
+      cursor++;
+    }
+    if (cursor >= xml.length) break;
+    const attributes = xml.slice(tagPattern.lastIndex, cursor);
+    const row = {};
+    attrPattern.lastIndex = 0;
+    for (const attrMatch of attributes.matchAll(attrPattern)) {
+      row[attrMatch[1]] = decodeXmlEntities(attrMatch[3]);
+    }
+    rows.push(row);
+    tagPattern.lastIndex = cursor + 1;
+  }
+  return rows;
+}
+function extractWinMssCabColumns(xml) {
+  const columns = [];
+  const pattern = /<s:AttributeType\b[^>]*\bname\s*=\s*(['"])(.*?)\1/gi;
+  for (const match2 of xml.matchAll(pattern)) {
+    if (!columns.includes(match2[2])) columns.push(match2[2]);
+  }
+  return columns;
+}
+function text(row, key) {
+  return (row[key] ?? "").trim();
+}
+function integer(row, key) {
+  const value = Number(text(row, key));
+  return Number.isFinite(value) ? value : 0;
+}
+function optionalInteger(row, key) {
+  const raw2 = text(row, key);
+  if (raw2 === "") return null;
+  const value = Number(raw2);
+  return Number.isFinite(value) ? value : null;
+}
+function decimal(row, key) {
+  const value = Number(text(row, key));
+  return Number.isFinite(value) ? value : 0;
+}
+function optionalDecimal(row, key) {
+  const raw2 = text(row, key);
+  if (raw2 === "") return null;
+  const value = Number(raw2);
+  return Number.isFinite(value) ? value : null;
+}
+function bool(row, key) {
+  const value = text(row, key).toLowerCase();
+  return value === "true" || value === "1" || value === "yes" || value === "y" || value === "-1";
+}
+function localIsoDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function validCalendarDate(year, month, day) {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+function parseWinMssCabDate(raw2) {
+  const value = raw2.trim();
+  if (!value) return null;
+  const iso = value.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+    if (validCalendarDate(year, month, day)) {
+      return localIsoDate(new Date(year, month - 1, day));
+    }
+    return null;
+  }
+  const european = value.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  if (european) {
+    const day = Number(european[1]);
+    const month = Number(european[2]);
+    const year = Number(european[3]);
+    if (validCalendarDate(year, month, day)) {
+      return localIsoDate(new Date(year, month - 1, day));
+    }
+    return null;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : localIsoDate(parsed);
+}
+function normalizeLevel(raw2) {
+  const level = Number(raw2);
+  if (!Number.isFinite(level) || level < 1 || level > 5) return null;
+  return Math.trunc(level);
+}
+function memberName(member) {
+  return `${member.firstName} ${member.lastName}`.trim();
+}
+function decodeXmlBuffer(data) {
+  if (data.length >= 2 && data[0] === 255 && data[1] === 254) {
+    return data.subarray(2).toString("utf16le").replace(/^\uFEFF/, "");
+  }
+  if (data.length >= 2 && data[0] === 254 && data[1] === 255) {
+    const swapped = Buffer.from(data.subarray(2));
+    swapped.swap16();
+    return swapped.toString("utf16le").replace(/^\uFEFF/, "");
+  }
+  return data.toString("utf8").replace(/^\uFEFF/, "");
+}
+function buildEntryMap(zip) {
+  const entries = /* @__PURE__ */ new Map();
+  Object.values(zip.files).forEach((entry) => {
+    if (entry.dir) return;
+    const base = entry.name.split("/").pop()?.toUpperCase();
+    if (base && !entries.has(base)) entries.set(base, entry);
+  });
+  return entries;
+}
+async function parseWinMssCab(buffer2) {
+  let files;
+  let readXml;
+  if (isMicrosoftCab(buffer2)) {
+    let entries;
+    try {
+      entries = extractCabEntries(buffer2);
+    } catch (err) {
+      throw new WinMssCabParseError(`Could not read WinMSS .cab archive: ${err.message}`);
+    }
+    const byName = /* @__PURE__ */ new Map();
+    for (const entry of entries) {
+      const base = entry.name.split("/").pop()?.toUpperCase();
+      if (base && !byName.has(base)) byName.set(base, entry.data);
+    }
+    files = [...byName.keys()].sort();
+    readXml = async (name) => {
+      const data = byName.get(name);
+      if (!data) throw new WinMssCabParseError(`CAB archive is missing ${name}`);
+      return decodeXmlBuffer(data);
+    };
+  } else if (isZipArchive(buffer2)) {
+    let zip;
+    try {
+      zip = await import_jszip.default.loadAsync(buffer2);
+    } catch (err) {
+      throw new WinMssCabParseError(`File is not a valid WinMSS archive: ${err.message}`);
+    }
+    const entries = buildEntryMap(zip);
+    files = [...entries.keys()].sort();
+    readXml = async (name) => {
+      const entry = entries.get(name);
+      if (!entry) throw new WinMssCabParseError(`CAB archive is missing ${name}`);
+      return decodeXmlBuffer(await entry.async("nodebuffer"));
+    };
+  } else {
+    throw new WinMssCabParseError(
+      "File is not a WinMSS .cab archive (expected a Microsoft Cabinet or ZIP file)"
+    );
+  }
+  const availableDataFiles = files.filter((name) => name.endsWith(".XML"));
+  const missing = REQUIRED_FILES.filter((name) => !files.includes(name));
+  if (missing.length > 0) {
+    throw new WinMssCabParseError(
+      `CAB archive is missing required WinMSS exports: ${missing.join(", ")}. Found: ${availableDataFiles.join(", ") || "none"}`
+    );
+  }
+  const xml = {
+    match: await readXml("THEMATCH.XML"),
+    member: await readXml("MEMBER.XML"),
+    enrolled: await readXml("ENROLLED.XML"),
+    stage: await readXml("STAGE.XML"),
+    score: await readXml("SCORE.XML")
+  };
+  const columns = {
+    THEMATCH: extractWinMssCabColumns(xml.match),
+    MEMBER: extractWinMssCabColumns(xml.member),
+    ENROLLED: extractWinMssCabColumns(xml.enrolled),
+    STAGE: extractWinMssCabColumns(xml.stage),
+    SCORE: extractWinMssCabColumns(xml.score)
+  };
+  const warnings = [];
+  const matchRows = parseWinMssCabRows(xml.match);
+  if (matchRows.length === 0) {
+    throw new WinMssCabParseError("THEMATCH.XML contains no match row");
+  }
+  if (matchRows.length > 1) {
+    warnings.push(
+      `CAB archive contains ${matchRows.length} match rows; importing only the first (MatchId=${integer(matchRows[0], "MatchId")})`
+    );
+  }
+  const firstMatch = matchRows[0];
+  const matchId = integer(firstMatch, "MatchId");
+  const rawDate = text(firstMatch, "MatchDt");
+  const date = parseWinMssCabDate(rawDate);
+  if (!date) {
+    warnings.push(`Match "${text(firstMatch, "MatchName")}" has invalid or missing date; using current date`);
+  }
+  const match2 = {
+    matchId,
+    name: text(firstMatch, "MatchName") || "WinMSS Match",
+    date: date || localIsoDate(/* @__PURE__ */ new Date()),
+    level: normalizeLevel(text(firstMatch, "MatchLevel")),
+    firearmId: integer(firstMatch, "FirearmId")
+  };
+  const memberRows = parseWinMssCabRows(xml.member).map((row) => ({
+    memberId: integer(row, "MemberId"),
+    lastName: text(row, "Lastname"),
+    firstName: text(row, "Firstname"),
+    region: text(row, "RegionId"),
+    email: text(row, "Email"),
+    female: bool(row, "Female"),
+    defaultDivisionId: optionalInteger(row, "DfltDivId"),
+    defaultCategoryId: optionalInteger(row, "DfltCatId")
+  })).filter((member) => member.memberId > 0).filter((member) => {
+    if (member.firstName || member.lastName) return true;
+    warnings.push(`Skipping member ${member.memberId}: first and last name are empty`);
+    return false;
+  });
+  const membersById = /* @__PURE__ */ new Map();
+  for (const member of memberRows) {
+    if (membersById.has(member.memberId)) {
+      warnings.push(`Duplicate MEMBER.XML row for MemberId ${member.memberId}; using the last row`);
+    }
+    membersById.set(member.memberId, member);
+  }
+  const members = [...membersById.values()];
+  const enrollmentRows = parseWinMssCabRows(xml.enrolled).filter(
+    (row) => matchId <= 0 || integer(row, "MatchId") === matchId
+  );
+  const enrollments = enrollmentRows.map((row) => ({
+    matchId: integer(row, "MatchId"),
+    memberId: integer(row, "MemberId"),
+    competitorId: optionalInteger(row, "CompId"),
+    divisionId: optionalInteger(row, "DivId"),
+    categoryId: optionalInteger(row, "CatId"),
+    squadId: optionalInteger(row, "SquadId"),
+    tagId: optionalInteger(row, "TagId"),
+    majorPowerFactor: bool(row, "MajorPF"),
+    isDisqualified: bool(row, "IsDisq"),
+    stageDisqualified: bool(row, "StageDisq"),
+    disqualificationRuleId: optionalInteger(row, "DisqRuleId"),
+    disqualificationMemo: text(row, "DisqMemo")
+  }));
+  const stageRows = parseWinMssCabRows(xml.stage).filter(
+    (row) => matchId <= 0 || integer(row, "MatchId") === matchId
+  );
+  const stages = stageRows.map((row) => ({
+    matchId: integer(row, "MatchId"),
+    stageId: integer(row, "StageId"),
+    name: text(row, "StageName") || `Stage ${integer(row, "StageId")}`,
+    firearmId: integer(row, "FirearmId"),
+    courseId: optionalInteger(row, "CourseId"),
+    scoringId: optionalInteger(row, "ScoringId"),
+    removed: bool(row, "Remove"),
+    paperTargets: integer(row, "TrgtPaper"),
+    popperTargets: integer(row, "TrgtPopper"),
+    plateTargets: integer(row, "TrgtPlates"),
+    vanishingTargets: integer(row, "TrgtVanish"),
+    penaltyTargets: integer(row, "TrgtPenlty"),
+    minRounds: integer(row, "MinRounds"),
+    maxPoints: integer(row, "MaxPoints"),
+    startPosition: text(row, "StartPos"),
+    description: text(row, "Descriptn")
+  }));
+  const scoreRows = parseWinMssCabRows(xml.score).filter(
+    (row) => matchId <= 0 || integer(row, "MatchId") === matchId
+  );
+  const scores = scoreRows.map((row) => ({
+    matchId: integer(row, "MatchId"),
+    stageId: integer(row, "StageId"),
+    memberId: integer(row, "MemberId"),
+    alpha: integer(row, "ScoreA"),
+    bravo: integer(row, "ScoreB"),
+    charlie: integer(row, "ScoreC"),
+    delta: integer(row, "ScoreD"),
+    misses: integer(row, "Misses"),
+    penalties: integer(row, "Penalties"),
+    proceduralErrors: integer(row, "ProcError"),
+    time: decimal(row, "ShootTime"),
+    removed: bool(row, "Remove"),
+    deduction: bool(row, "Deduction"),
+    flagForDelete: bool(row, "FlagDelete"),
+    isDisqualified: bool(row, "IsDisq"),
+    deductionPercent: decimal(row, "DedPctg"),
+    extraShots: integer(row, "ExtraShot"),
+    overtimeShots: integer(row, "OverTime"),
+    hitFactor: optionalDecimal(row, "HitFactor"),
+    finalScore: optionalDecimal(row, "FinalScore"),
+    lastModified: text(row, "LastModify"),
+    noVerify: bool(row, "NoVerify")
+  }));
+  const enrolledMemberIds = new Set(enrollments.map((enrollment) => enrollment.memberId));
+  if (enrollments.length === 0) {
+    warnings.push("ENROLLED.XML contains no enrollment rows for this match");
+  }
+  if (stages.length === 0) {
+    warnings.push("STAGE.XML contains no stage rows for this match");
+  }
+  if (scores.length === 0) {
+    warnings.push("SCORE.XML contains no score rows for this match");
+  }
+  const enrolledMemberNames = new Set(
+    members.filter((member) => enrolledMemberIds.has(member.memberId)).map(memberName)
+  );
+  if (enrolledMemberNames.size === 0 && enrollments.length > 0) {
+    warnings.push("No enrolled members could be resolved against MEMBER.XML");
+  }
+  return {
+    format: "cab",
+    match: match2,
+    members,
+    enrollments,
+    stages,
+    scores,
+    files,
+    columns,
+    warnings
+  };
+}
+
+// ../backend/src/services/winmssCabImport.ts
+init_client();
+init_scoringCalc();
+var DEFAULT_DIVISION = "production";
+var DEFAULT_CATEGORY = "regular";
+function resolveDivision(id, ctx) {
+  if (id === null || id <= 0) return DEFAULT_DIVISION;
+  const mapped = WINMSS_DIVISION_MAP[id];
+  if (mapped) return mapped;
+  if (!ctx.divisionWarnings.has(id)) {
+    ctx.divisionWarnings.add(id);
+    ctx.warnings.push(
+      `Unknown WinMSS division ID ${id}; imported as "${DEFAULT_DIVISION}". Add it to WINMSS_DIVISION_MAP if it should map elsewhere.`
+    );
+  }
+  return DEFAULT_DIVISION;
+}
+function resolveCategory(id, ctx) {
+  if (id === null || id <= 0) return DEFAULT_CATEGORY;
+  const mapped = WINMSS_CATEGORY_MAP[id];
+  if (mapped) return mapped;
+  if (!ctx.categoryWarnings.has(id)) {
+    ctx.categoryWarnings.add(id);
+    ctx.warnings.push(
+      `Unknown WinMSS category ID ${id}; imported as "${DEFAULT_CATEGORY}". Add it to WINMSS_CATEGORY_MAP if it should map elsewhere.`
+    );
+  }
+  return DEFAULT_CATEGORY;
+}
+function normalizeSquad(id) {
+  return id === null || id <= 0 ? null : id;
+}
+function registrationDqReason(enrollment) {
+  if (!enrollment.isDisqualified) return null;
+  if (enrollment.disqualificationMemo) return enrollment.disqualificationMemo;
+  if (enrollment.disqualificationRuleId) {
+    return `DQ (WinMSS rule ${enrollment.disqualificationRuleId})`;
+  }
+  return "DQ (imported from WinMSS CAB)";
+}
+function stageSourceConfig(stage) {
+  return {
+    source: "winmss_cab",
+    winmss: {
+      stage_id: stage.stageId,
+      course_id: stage.courseId,
+      scoring_id: stage.scoringId,
+      // TrgtVanish is disappearing-target metadata only. It is deliberately
+      // not mapped to npm_targets or counted as non-penalty metal.
+      vanishing_targets: stage.vanishingTargets,
+      // WinMSS exports TrgtPenlty as a bit field (e.g. 32), not a target count,
+      // so it is preserved verbatim instead of becoming no_shoot_targets.
+      penalty_target_field: stage.penaltyTargets,
+      start_position: stage.startPosition || null,
+      description: stage.description || null
+    }
+  };
+}
+function computeStageMaxPoints(stage, paperTargets, steelTargets) {
+  if (stage.maxPoints > 0) return stage.maxPoints;
+  return paperTargets * 2 * 5 + steelTargets * 5;
+}
+async function importWinMssCab(buffer2, fileName) {
+  const cab = await parseWinMssCab(buffer2);
+  const result = {
+    matches: [],
+    stages: [],
+    shooters: { created: 0, skipped: 0, errors: [] },
+    registrations: { created: 0, skipped: 0 },
+    scores: { created: 0, skipped: 0, errors: [] },
+    warnings: [...cab.warnings]
+  };
+  const ctx = {
+    matchId: "",
+    warnings: result.warnings,
+    divisionWarnings: /* @__PURE__ */ new Set(),
+    categoryWarnings: /* @__PURE__ */ new Set()
+  };
+  const matchName = cab.match.name === "WinMSS Match" ? fileName.replace(/\.cab$/i, "") : cab.match.name;
+  const firearmType = mapFirearmType(cab.match.firearmId);
+  const existingMatch = await sql`
+    SELECT id FROM matches WHERE name = ${matchName} AND date = ${cab.match.date}
+  `;
+  let matchId;
+  if (existingMatch.length > 0) {
+    matchId = existingMatch[0].id;
+    await sql`
+      UPDATE matches SET
+        firearm_type = ${firearmType},
+        match_level = COALESCE(${cab.match.level}, match_level),
+        updated_at = NOW()
+      WHERE id = ${matchId}
+    `;
+    result.matches.push({
+      id: matchId,
+      name: matchName,
+      date: cab.match.date,
+      imported: true,
+      updated: true
+    });
+    result.warnings.push(`Match "${matchName}" already exists; imported data was updated`);
+  } else {
+    const [match2] = await sql`
+      INSERT INTO matches (name, date, organization, firearm_type, match_level)
+      VALUES (${matchName}, ${cab.match.date}, 'IPSC', ${firearmType}, ${cab.match.level})
+      RETURNING id
+    `;
+    matchId = match2.id;
+    result.matches.push({ id: matchId, name: matchName, date: cab.match.date, imported: true });
+  }
+  ctx.matchId = matchId;
+  const enrolledMemberIds = new Set(cab.enrollments.map((enrollment) => enrollment.memberId));
+  const membersToImport = enrolledMemberIds.size > 0 ? cab.members.filter((member) => enrolledMemberIds.has(member.memberId)) : cab.members;
+  const membersById = new Map(cab.members.map((member) => [member.memberId, member]));
+  for (const memberId of enrolledMemberIds) {
+    if (!membersById.has(memberId)) {
+      result.warnings.push(`Enrolled member ${memberId} is missing from MEMBER.XML and will be skipped`);
+    }
+  }
+  const shooterIdByMember = /* @__PURE__ */ new Map();
+  for (const member of membersToImport) {
+    try {
+      if (!member.firstName || !member.lastName) {
+        result.shooters.skipped++;
+        result.shooters.errors.push(
+          `Member ${member.memberId}: missing name (first="${member.firstName}", last="${member.lastName}")`
+        );
+        continue;
+      }
+      const existing = await sql`
+        SELECT id, deleted_at FROM shooters
+        WHERE winmss_member_id = ${member.memberId}
+        LIMIT 1
+      `;
+      if (existing.length > 0) {
+        if (existing[0].deleted_at) {
+          result.shooters.skipped++;
+          result.shooters.errors.push(
+            `Member ${member.memberId}: a soft-deleted shooter already uses this WinMSS ID; restore or purge it before re-importing`
+          );
+          continue;
+        }
+        const shooterId = existing[0].id;
+        shooterIdByMember.set(member.memberId, shooterId);
+        await sql`
+          UPDATE shooters SET
+            first_name = ${member.firstName},
+            last_name = ${member.lastName},
+            region = CASE WHEN ${member.region} <> '' THEN ${member.region} ELSE region END,
+            email = CASE WHEN ${member.email} <> '' THEN ${member.email} ELSE email END,
+            updated_at = NOW()
+          WHERE id = ${shooterId} AND deleted_at IS NULL
+        `;
+        result.shooters.skipped++;
+      } else {
+        const division = resolveDivision(member.defaultDivisionId, ctx);
+        const category = resolveCategory(member.defaultCategoryId, ctx);
+        const [shooter] = await sql`
+          INSERT INTO shooters (
+            first_name, last_name, category, division, power_factor, region, email, winmss_member_id
+          )
+          VALUES (
+            ${member.firstName}, ${member.lastName}, ${category}, ${division},
+            'minor', ${member.region}, ${member.email || null}, ${member.memberId}
+          )
+          RETURNING id
+        `;
+        shooterIdByMember.set(member.memberId, shooter.id);
+        result.shooters.created++;
+      }
+    } catch (err) {
+      result.shooters.errors.push(`Member ${member.memberId}: ${err.message}`);
+    }
+  }
+  const dbStageBySourceId = /* @__PURE__ */ new Map();
+  const activeStages = cab.stages.filter((stage) => {
+    if (!stage.removed) return true;
+    result.warnings.push(`Stage ${stage.stageId} "${stage.name}" is marked removed in WinMSS; skipped`);
+    return false;
+  });
+  for (const stage of activeStages) {
+    try {
+      const paperTargets = Math.max(0, stage.paperTargets);
+      const steelTargets = Math.max(0, stage.popperTargets + stage.plateTargets);
+      const noShootTargets = 0;
+      const minRounds = stage.minRounds > 0 ? stage.minRounds : paperTargets * 2 + steelTargets;
+      const scoringType = inferScoringType({
+        paperTargets,
+        steelTargets,
+        minRounds,
+        scoringTypeId: stage.scoringId
+      });
+      const hitsPerPaper = inferHitsPerPaper();
+      const maxPoints = computeStageMaxPoints(stage, paperTargets, steelTargets);
+      const config = stageSourceConfig(stage);
+      const briefing = stage.description || null;
+      const existing = await sql`
+        SELECT id FROM stages WHERE match_id = ${matchId} AND stage_number = ${stage.stageId}
+      `;
+      let dbStage;
+      if (existing.length > 0) {
+        const [updated] = await sql`
+          UPDATE stages SET
+            name = ${stage.name},
+            scoring_type = ${scoringType},
+            paper_targets = ${paperTargets},
+            steel_targets = ${steelTargets},
+            no_shoot_targets = ${noShootTargets},
+            npm_targets = 0,
+            hits_per_paper = ${hitsPerPaper},
+            min_rounds = ${minRounds},
+            max_points = ${maxPoints},
+            briefing = ${briefing},
+            config = COALESCE(config, '{}'::jsonb) || ${JSON.stringify(config)}::jsonb,
+            updated_at = NOW()
+          WHERE id = ${existing[0].id}
+          RETURNING id, stage_number, name, scoring_type, paper_targets, steel_targets,
+            no_shoot_targets, hits_per_paper, min_rounds, max_points
+        `;
+        dbStage = updated;
+        result.stages.push({
+          id: dbStage.id,
+          name: dbStage.name,
+          stage_number: dbStage.stage_number,
+          updated: true
+        });
+      } else {
+        const [inserted] = await sql`
+          INSERT INTO stages (
+            match_id, stage_number, name, scoring_type, paper_targets, steel_targets,
+            no_shoot_targets, npm_targets, hits_per_paper, min_rounds, max_points, briefing, config
+          )
+          VALUES (
+            ${matchId}, ${stage.stageId}, ${stage.name}, ${scoringType}, ${paperTargets},
+            ${steelTargets}, ${noShootTargets}, 0, ${hitsPerPaper}, ${minRounds}, ${maxPoints},
+            ${briefing}, ${JSON.stringify(config)}::jsonb
+          )
+          RETURNING id, stage_number, name, scoring_type, paper_targets, steel_targets,
+            no_shoot_targets, hits_per_paper, min_rounds, max_points
+        `;
+        dbStage = inserted;
+        result.stages.push({
+          id: dbStage.id,
+          name: dbStage.name,
+          stage_number: dbStage.stage_number
+        });
+      }
+      dbStageBySourceId.set(stage.stageId, dbStage);
+    } catch (err) {
+      result.warnings.push(`Failed to import stage ${stage.stageId} "${stage.name}": ${err.message}`);
+    }
+  }
+  const registrationIdByMember = /* @__PURE__ */ new Map();
+  const powerFactorByMember = /* @__PURE__ */ new Map();
+  for (const enrollment of cab.enrollments) {
+    try {
+      const shooterId = shooterIdByMember.get(enrollment.memberId);
+      if (!shooterId) {
+        result.warnings.push(`Enrollment for member ${enrollment.memberId} has no shooter record; skipped`);
+        continue;
+      }
+      const division = resolveDivision(enrollment.divisionId, ctx);
+      const category = resolveCategory(enrollment.categoryId, ctx);
+      const powerFactor = enrollment.majorPowerFactor ? "major" : "minor";
+      const squad = normalizeSquad(enrollment.squadId);
+      const isDq = enrollment.isDisqualified;
+      const dqReason = registrationDqReason(enrollment);
+      powerFactorByMember.set(enrollment.memberId, powerFactor);
+      if (enrollment.stageDisqualified) {
+        result.warnings.push(
+          `Member ${enrollment.memberId} has a stage-level DQ in WinMSS; only the match-level DQ flag is imported`
+        );
+      }
+      const existing = await sql`
+        SELECT id FROM match_registrations
+        WHERE match_id = ${matchId} AND shooter_id = ${shooterId}
+      `;
+      if (existing.length > 0) {
+        const registrationId = existing[0].id;
+        await sql`
+          UPDATE match_registrations SET
+            squad = ${squad},
+            division = ${division},
+            category = ${category},
+            power_factor = ${powerFactor},
+            is_dq = ${isDq},
+            dq_reason = ${dqReason}
+          WHERE id = ${registrationId}
+        `;
+        registrationIdByMember.set(enrollment.memberId, registrationId);
+        result.registrations.skipped++;
+      } else {
+        const [registration] = await sql`
+          INSERT INTO match_registrations (
+            match_id, shooter_id, squad, division, category, power_factor, is_dq, dq_reason
+          )
+          VALUES (
+            ${matchId}, ${shooterId}, ${squad}, ${division}, ${category},
+            ${powerFactor}, ${isDq}, ${dqReason}
+          )
+          RETURNING id
+        `;
+        registrationIdByMember.set(enrollment.memberId, registration.id);
+        result.registrations.created++;
+      }
+    } catch (err) {
+      result.warnings.push(`Registration import error for member ${enrollment.memberId}: ${err.message}`);
+    }
+  }
+  let missingRegistrationCount = 0;
+  let missingStageCount = 0;
+  for (const score of cab.scores) {
+    const registrationId = registrationIdByMember.get(score.memberId);
+    const stage = dbStageBySourceId.get(score.stageId);
+    if (score.removed || score.flagForDelete) {
+      result.scores.skipped++;
+      if (registrationId && stage) {
+        await sql`
+          DELETE FROM stage_scores
+          WHERE stage_id = ${stage.id} AND registration_id = ${registrationId}
+        `;
+      }
+      continue;
+    }
+    if (!registrationId) {
+      missingRegistrationCount++;
+      if (missingRegistrationCount <= 5) {
+        result.scores.errors.push(
+          `Score row member ${score.memberId} stage ${score.stageId}: no registration (member not enrolled?)`
+        );
+      }
+      continue;
+    }
+    if (!stage) {
+      missingStageCount++;
+      if (missingStageCount <= 5) {
+        result.scores.errors.push(
+          `Score row member ${score.memberId} stage ${score.stageId}: stage was not imported`
+        );
+      }
+      continue;
+    }
+    try {
+      const powerFactor = powerFactorByMember.get(score.memberId) || "minor";
+      const steelCount = stage.steel_targets || 0;
+      const steelHits = Math.min(steelCount, score.alpha);
+      const isDnf = score.isDisqualified;
+      const calcResult = calculateAggregatedScore({
+        total_alpha: score.alpha,
+        total_charlie: score.charlie,
+        total_delta: score.delta,
+        total_miss: score.misses,
+        total_no_shoot: score.penalties,
+        total_steel: steelCount,
+        steel_hit_count: steelHits,
+        procedural_count: score.proceduralErrors,
+        ftsa_count: 0,
+        extra_shot_count: score.extraShots,
+        extra_hit_count: 0,
+        stacking_count: 0,
+        overtime_shot_count: score.overtimeShots,
+        time: score.time,
+        scoring_type: stage.scoring_type,
+        power_factor: powerFactor
+      });
+      const targets = buildTargets(
+        score.alpha,
+        score.charlie,
+        score.delta,
+        score.misses,
+        score.penalties,
+        stage,
+        steelHits
+      );
+      const scoreData = {
+        source: "winmss_cab",
+        aggregated: {
+          alpha: score.alpha,
+          bravo: score.bravo,
+          charlie: score.charlie,
+          delta: score.delta,
+          miss: score.misses,
+          no_shoot: score.penalties,
+          procedural: score.proceduralErrors,
+          steel_count: steelCount,
+          extra_shot: score.extraShots,
+          overtime_shot: score.overtimeShots
+        },
+        source_score: {
+          final_score: score.finalScore,
+          hit_factor: score.hitFactor,
+          deduction: score.deduction,
+          deduction_percent: score.deductionPercent,
+          removed: score.removed,
+          flag_for_delete: score.flagForDelete,
+          is_disq: score.isDisqualified,
+          last_modified: score.lastModified || null,
+          no_verify: score.noVerify
+        }
+      };
+      const existing = await sql`
+        SELECT id FROM stage_scores
+        WHERE stage_id = ${stage.id} AND registration_id = ${registrationId}
+      `;
+      let stageScoreId;
+      if (existing.length > 0) {
+        stageScoreId = existing[0].id;
+        await sql`
+          UPDATE stage_scores SET
+            time = ${score.time},
+            extra_shot_count = ${score.extraShots},
+            extra_hit_count = 0,
+            stacking_count = 0,
+            overtime_shot_count = ${score.overtimeShots},
+            procedural_count = ${score.proceduralErrors},
+            ftsa_count = 0,
+            is_dnf = ${isDnf},
+            raw_points = ${calcResult.raw_points},
+            penalty_points = ${calcResult.penalty_points},
+            net_points = ${calcResult.net_points},
+            hit_factor = ${calcResult.hit_factor},
+            score_data = ${JSON.stringify(scoreData)}::jsonb,
+            updated_at = NOW()
+          WHERE id = ${stageScoreId}
+        `;
+        await sql`DELETE FROM target_scores WHERE stage_score_id = ${stageScoreId}`;
+      } else {
+        const [inserted] = await sql`
+          INSERT INTO stage_scores (
+            match_id, stage_id, registration_id, time, extra_shot_count, overtime_shot_count,
+            procedural_count, is_dnf, raw_points, penalty_points, net_points, hit_factor, score_data
+          )
+          VALUES (
+            ${matchId}, ${stage.id}, ${registrationId}, ${score.time}, ${score.extraShots},
+            ${score.overtimeShots}, ${score.proceduralErrors}, ${isDnf},
+            ${calcResult.raw_points}, ${calcResult.penalty_points}, ${calcResult.net_points},
+            ${calcResult.hit_factor}, ${JSON.stringify(scoreData)}::jsonb
+          )
+          RETURNING id
+        `;
+        stageScoreId = inserted.id;
+      }
+      for (let i = 0; i < targets.length; i++) {
+        const target = targets[i];
+        await sql`
+          INSERT INTO target_scores (
+            stage_score_id, target_index, target_type, alpha, charlie, delta, miss,
+            no_shoot_hits, steel_hit
+          )
+          VALUES (
+            ${stageScoreId}, ${i + 1}, ${target.target_type}, ${target.alpha},
+            ${target.charlie}, ${target.delta}, ${target.miss}, ${target.no_shoot_hits},
+            ${target.steel_hit}
+          )
+        `;
+      }
+      result.scores.created++;
+    } catch (err) {
+      result.scores.errors.push(
+        `Score import error for member ${score.memberId} stage ${score.stageId}: ${err.message}`
+      );
+    }
+  }
+  if (missingRegistrationCount > 0) {
+    result.warnings.push(
+      `${missingRegistrationCount} score rows skipped \u2014 member was not enrolled in this match`
+    );
+  }
+  if (missingStageCount > 0) {
+    result.warnings.push(`${missingStageCount} score rows skipped \u2014 stage was not imported`);
+  }
+  if (result.scores.skipped > 0) {
+    result.warnings.push(
+      `${result.scores.skipped} score rows marked Remove/FlagDelete in WinMSS were skipped`
+    );
+  }
+  for (const stage of dbStageBySourceId.values()) {
+    try {
+      await recalculateStage(matchId, stage.id);
+    } catch (err) {
+      result.warnings.push(`Failed to recalculate stage ${stage.stage_number}: ${err.message}`);
+    }
+  }
+  try {
+    await sql`
+      UPDATE shooters s
+      SET division = latest.division,
+          category = latest.category,
+          power_factor = latest.power_factor,
+          updated_at = NOW()
+      FROM (
+        SELECT DISTINCT ON (shooter_id)
+          shooter_id, division, category, power_factor
+        FROM match_registrations
+        WHERE match_id = ${matchId} AND division IS NOT NULL
+        ORDER BY shooter_id, registered_at DESC
+      ) latest
+      WHERE s.id = latest.shooter_id AND s.deleted_at IS NULL
+    `;
+  } catch (err) {
+    result.warnings.push(`Could not update shooter defaults from registrations: ${err.message}`);
+  }
+  return result;
+}
+function distributeHits(totalA, totalC, totalD, totalM, count, maxPerTarget) {
+  const targets = Array.from({ length: count }, () => ({ alpha: 0, charlie: 0, delta: 0, miss: 0 }));
+  let remaining = totalA;
+  for (let i = 0; i < count && remaining > 0; i++) {
+    const space2 = maxPerTarget - targets[i].alpha;
+    const fill = Math.min(space2, remaining);
+    targets[i].alpha = fill;
+    remaining -= fill;
+  }
+  remaining = totalC;
+  for (let i = 0; i < count && remaining > 0; i++) {
+    const space2 = maxPerTarget - (targets[i].alpha + targets[i].charlie);
+    const fill = Math.min(space2, remaining);
+    targets[i].charlie = fill;
+    remaining -= fill;
+  }
+  remaining = totalD;
+  for (let i = 0; i < count && remaining > 0; i++) {
+    const space2 = maxPerTarget - (targets[i].alpha + targets[i].charlie + targets[i].delta);
+    const fill = Math.min(space2, remaining);
+    targets[i].delta = fill;
+    remaining -= fill;
+  }
+  remaining = totalM;
+  for (let i = 0; i < count && remaining > 0; i++) {
+    const space2 = maxPerTarget - (targets[i].alpha + targets[i].charlie + targets[i].delta + targets[i].miss);
+    const fill = Math.min(space2, remaining);
+    targets[i].miss = fill;
+    remaining -= fill;
+  }
+  return targets;
+}
+function buildTargets(alpha, charlie, delta, misses, noShootHits, stage, steelHits) {
+  const hitsPerPaper = stage.hits_per_paper || 2;
+  const paperCount = Math.max(stage.paper_targets || 0, 1);
+  const steelCount = stage.steel_targets || 0;
+  const paperAlpha = Math.max(0, alpha - steelHits);
+  const paperTargets = distributeHits(paperAlpha, charlie, delta, misses, paperCount, hitsPerPaper);
+  if (stage.no_shoot_targets === 0 && noShootHits > 0) {
+    let remaining = noShootHits;
+    for (let i = 0; i < paperCount && remaining > 0; i++) {
+      const space2 = hitsPerPaper - (paperTargets[i].alpha + paperTargets[i].charlie + paperTargets[i].delta + paperTargets[i].miss);
+      const fill = Math.min(Math.max(space2, 0), remaining);
+      paperTargets[i].miss += fill;
+      remaining -= fill;
+    }
+  }
+  const targets = paperTargets.map((target) => ({
+    target_type: "paper",
+    alpha: target.alpha,
+    charlie: target.charlie,
+    delta: target.delta,
+    miss: target.miss,
+    no_shoot_hits: 0,
+    steel_hit: null
+  }));
+  if (stage.no_shoot_targets > 0) {
+    const perTarget = Math.floor(noShootHits / stage.no_shoot_targets);
+    let remainder = noShootHits % stage.no_shoot_targets;
+    for (let i = 0; i < stage.no_shoot_targets; i++) {
+      targets.push({
+        target_type: "no_shoot",
+        alpha: 0,
+        charlie: 0,
+        delta: 0,
+        miss: 0,
+        no_shoot_hits: perTarget + (remainder > 0 ? 1 : 0),
+        steel_hit: null
+      });
+      if (remainder > 0) remainder--;
+    }
+  }
+  for (let i = 0; i < steelCount; i++) {
+    targets.push({
+      target_type: "steel",
+      alpha: 0,
+      charlie: 0,
+      delta: 0,
+      miss: 0,
+      no_shoot_hits: 0,
+      steel_hit: i < steelHits
+    });
+  }
+  return targets;
+}
+
+// ../backend/src/routes/winmssImport.ts
 var winmssImportRoutes = new Hono2();
 winmssImportRoutes.post("/winmss/inspect", async (c) => {
   const body = await c.req.parseBody();
   const file = body["file"];
   if (!file || !(file instanceof File)) {
-    return c.json({ error: "No .mdb file provided" }, 400);
+    return c.json({ error: "No WinMSS file provided" }, 400);
+  }
+  const lowerName = file.name.toLowerCase();
+  if (!lowerName.endsWith(".mdb") && !lowerName.endsWith(".accdb") && !lowerName.endsWith(".cab")) {
+    return c.json({ error: "File must be a .mdb, .accdb or .cab file" }, 400);
   }
   try {
     const buffer2 = Buffer.from(await file.arrayBuffer());
+    if (lowerName.endsWith(".cab")) {
+      const cab = await parseWinMssCab(buffer2);
+      return c.json({
+        format: "cab",
+        files: cab.files,
+        warnings: cab.warnings,
+        tables: {
+          THEMATCH: {
+            columns: cab.columns.THEMATCH,
+            rowCount: 1,
+            sampleRows: [cab.match]
+          },
+          MEMBER: {
+            columns: cab.columns.MEMBER,
+            rowCount: cab.members.length,
+            sampleRows: cab.members.slice(0, 3)
+          },
+          ENROLLED: {
+            columns: cab.columns.ENROLLED,
+            rowCount: cab.enrollments.length,
+            sampleRows: cab.enrollments.slice(0, 3)
+          },
+          STAGE: {
+            columns: cab.columns.STAGE,
+            rowCount: cab.stages.length,
+            sampleRows: cab.stages.slice(0, 3)
+          },
+          SCORE: {
+            columns: cab.columns.SCORE,
+            rowCount: cab.scores.length,
+            sampleRows: cab.scores.slice(0, 3)
+          }
+        }
+      });
+    }
     const reader = new MDBReader(buffer2);
     const tableNames = reader.getTableNames();
     const result = { tables: {} };
@@ -26271,6 +27459,9 @@ winmssImportRoutes.post("/winmss/inspect", async (c) => {
     }
     return c.json(result);
   } catch (err) {
+    if (err instanceof WinMssCabParseError) {
+      return c.json({ error: err.message }, 400);
+    }
     return c.json({ error: `Inspect failed: ${err.message}` }, 500);
   }
 });
@@ -26278,13 +27469,22 @@ winmssImportRoutes.post("/winmss", async (c) => {
   const body = await c.req.parseBody();
   const file = body["file"];
   if (!file || !(file instanceof File)) {
-    return c.json({ error: "No .mdb file provided" }, 400);
+    return c.json({ error: "No WinMSS file provided" }, 400);
   }
-  if (!file.name.endsWith(".mdb") && !file.name.endsWith(".accdb")) {
-    return c.json({ error: "File must be a .mdb or .accdb file" }, 400);
+  const lowerName = file.name.toLowerCase();
+  const isCab = lowerName.endsWith(".cab");
+  if (!isCab && !lowerName.endsWith(".mdb") && !lowerName.endsWith(".accdb")) {
+    return c.json({ error: "File must be a .mdb, .accdb or .cab file" }, 400);
   }
   try {
     const buffer2 = Buffer.from(await file.arrayBuffer());
+    if (isCab) {
+      const result2 = await importWinMssCab(buffer2, file.name);
+      console.log(
+        `[WinMSS CAB Import] Complete: ${result2.matches.length} match(es), ${result2.stages.length} stages, ${result2.shooters.created}/${result2.shooters.skipped} shooters, ${result2.registrations.created}/${result2.registrations.skipped} registrations, ${result2.scores.created} scores`
+      );
+      return c.json(result2);
+    }
     const reader = new MDBReader(buffer2);
     const tableNames = reader.getTableNames();
     console.log("[WinMSS Import] Discovered tables:", tableNames.join(", "));
@@ -26678,7 +27878,7 @@ winmssImportRoutes.post("/winmss", async (c) => {
           );
           for (const scoreRow of matchScoreRows) {
             try {
-              let distributeHits2 = function(totalA, totalC, totalD, totalM, count, maxPerTarget) {
+              let distributeHits3 = function(totalA, totalC, totalD, totalM, count, maxPerTarget) {
                 const targets2 = Array.from({ length: count }, () => ({ alpha: 0, charlie: 0, delta: 0, miss: 0 }));
                 let remaining = totalA;
                 for (let i = 0; i < count && remaining > 0; i++) {
@@ -26710,7 +27910,7 @@ winmssImportRoutes.post("/winmss", async (c) => {
                 }
                 return targets2;
               };
-              var distributeHits = distributeHits2;
+              var distributeHits2 = distributeHits3;
               const wmsMemberIdRaw = findColumn(scoreRow, "scoreMemberId") ?? findColumn(scoreRow, "memberId") ?? findColumn(scoreRow, "competitorId");
               const wmsMemberId = wmsMemberIdRaw !== void 0 ? Number(wmsMemberIdRaw) : 0;
               const wmsStageId = Number(findColumn(scoreRow, "stageId") ?? findColumn(scoreRow, "stageNumber") ?? 0);
@@ -26779,7 +27979,7 @@ winmssImportRoutes.post("/winmss", async (c) => {
               const paperCharlie = charlie;
               const paperDelta = delta;
               const paperMiss = miss;
-              const paperTargets = distributeHits2(paperAlpha, paperCharlie, paperDelta, paperMiss, paperCount, hpp);
+              const paperTargets = distributeHits3(paperAlpha, paperCharlie, paperDelta, paperMiss, paperCount, hpp);
               const nsOnPaper = stage.no_shoot_targets === 0 ? noShootHits : 0;
               if (nsOnPaper > 0) {
                 let remaining = nsOnPaper;
@@ -26979,13 +28179,16 @@ winmssImportRoutes.post("/winmss", async (c) => {
     return c.json(result);
   } catch (err) {
     console.error("[WinMSS Import] Error:", err);
+    if (err instanceof WinMssCabParseError) {
+      return c.json({ error: err.message }, 400);
+    }
     return c.json({ error: `Import failed: ${err.message}` }, 500);
   }
 });
 
 // ../backend/src/routes/pscImport.ts
 import crypto5 from "crypto";
-var import_jszip = __toESM(require_lib3(), 1);
+var import_jszip2 = __toESM(require_lib3(), 1);
 init_client();
 
 // ../backend/src/utils/pscMapper.ts
@@ -27579,7 +28782,7 @@ pscImportRoutes.post("/matches/import-psc", async (c) => {
   }
   try {
     const buffer2 = Buffer.from(await file.arrayBuffer());
-    const zip = await import_jszip.default.loadAsync(buffer2);
+    const zip = await import_jszip2.default.loadAsync(buffer2);
     const matchDefFile = zip.file("match_def.json");
     const matchScoresFile = zip.file("match_scores.json");
     if (!matchDefFile || !matchScoresFile) {
@@ -27706,7 +28909,7 @@ pscImportRoutes.post("/matches/import-psc", async (c) => {
 });
 
 // ../backend/src/routes/pscExport.ts
-var import_jszip2 = __toESM(require_lib3(), 1);
+var import_jszip3 = __toESM(require_lib3(), 1);
 init_client();
 var pscExportRoutes = new Hono2();
 pscExportRoutes.get("/matches/:id/export-psc", async (c) => {
@@ -27761,7 +28964,7 @@ pscExportRoutes.get("/matches/:id/export-psc", async (c) => {
     stageScores,
     targetScores
   );
-  const zip = new import_jszip2.default();
+  const zip = new import_jszip3.default();
   zip.file("match_def.json", JSON.stringify(match_def));
   zip.file("match_scores.json", JSON.stringify(match_scores));
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
@@ -30478,8 +31681,8 @@ localBackupRoutes.post("/local-backup/config", async (c) => {
     try {
       body = await c.req.json();
     } catch {
-      const text = await c.req.text();
-      body = JSON.parse(text);
+      const text2 = await c.req.text();
+      body = JSON.parse(text2);
     }
     await saveConfig(body);
     return c.json({ success: true });
@@ -30494,8 +31697,8 @@ localBackupRoutes.post("/local-backup/preview-folder", async (c) => {
     try {
       body = await c.req.json();
     } catch {
-      const text = await c.req.text();
-      if (text) body = JSON.parse(text);
+      const text2 = await c.req.text();
+      if (text2) body = JSON.parse(text2);
     }
     const folder = body.folder || await getBackupFolder();
     if (!folder) return c.json({ error: "No backup folder configured or specified" }, 400);
@@ -30512,8 +31715,8 @@ localBackupRoutes.post("/local-backup/restore-folder", async (c) => {
     try {
       body = await c.req.json();
     } catch {
-      const text = await c.req.text();
-      if (text) body = JSON.parse(text);
+      const text2 = await c.req.text();
+      if (text2) body = JSON.parse(text2);
     }
     const folder = body.folder || await getBackupFolder();
     if (!folder) return c.json({ error: "No backup folder configured or specified" }, 400);
@@ -30662,8 +31865,8 @@ matchExportRoutes.post("/matches/import", async (c) => {
   }
   let data;
   try {
-    const text = await file.text();
-    data = JSON.parse(text);
+    const text2 = await file.text();
+    data = JSON.parse(text2);
   } catch {
     return c.json({ error: "Invalid JSON file" }, 400);
   }
@@ -30772,7 +31975,7 @@ var CUP_CATEGORIES = /* @__PURE__ */ new Set(["regular", "junior", "senior", "su
 function isScoringMode(v) {
   return v === "hit_factor" || v === "points";
 }
-function num(v) {
+function num2(v) {
   return v == null ? 0 : Number(v);
 }
 function round2(v) {
@@ -31105,12 +32308,12 @@ cupRoutes.get("/:id/results", async (c) => {
     tag: r.tag || null,
     division: r.division || "unknown",
     category: r.category || "regular",
-    valid: !r.is_dq && num(r.scored_stages) > 0,
-    metric: mode === "hit_factor" ? r.match_hf != null ? num(r.match_hf) : 0 : num(r.match_points),
-    matchPoints: num(r.match_points),
-    matchHf: num(r.match_hf),
-    netPoints: num(r.hf_net_points),
-    hfTime: num(r.hf_time)
+    valid: !r.is_dq && num2(r.scored_stages) > 0,
+    metric: mode === "hit_factor" ? r.match_hf != null ? num2(r.match_hf) : 0 : num2(r.match_points),
+    matchPoints: num2(r.match_points),
+    matchHf: num2(r.match_hf),
+    netPoints: num2(r.hf_net_points),
+    hfTime: num2(r.hf_time)
   }));
   const shooters = /* @__PURE__ */ new Map();
   for (const agg of aggs) {
