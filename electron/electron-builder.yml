@@ -41,6 +41,10 @@ extraResources:
 # so the universal merger can LIPO-merge them back properly.
 afterPack: scripts/afterPack.js
 
+# Rename macOS artifacts to user-facing arch labels after packaging
+# (…_Mac_arm64.dmg -> …_Mac_Apple_Silicon.dmg).
+afterAllArtifactBuild: scripts/afterAllArtifactBuild.js
+
 # ── Artifact names ───────────────────────────────────────────────────────
 # Every target includes ${arch}. Without it a Windows x64 and an arm64 build
 # write the same `IPSCScore Setup <version>.exe`, so one silently overwrites the

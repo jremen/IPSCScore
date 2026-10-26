@@ -34,6 +34,27 @@ PG_MAJOR="${PG_VERSION%%.*}"
 PG_DIR="$RESOURCES_DIR/pg"
 PG_BIN_DIR="$PG_DIR/bin"
 
+# --- Preflight: Linux shared-library bundling prerequisites ---
+# Linux PostgreSQL binaries link against system libraries that must be bundled
+# with the app. On a Linux host ldd resolves them directly. On macOS there is
+# no ldd that can inspect Linux ELF binaries, so a running Docker daemon is
+# required. Check this before deleting any previously downloaded binaries.
+if [[ "$PLATFORM" == linux-* ]] && ! command -v ldd &>/dev/null; then
+  if ! command -v docker &>/dev/null; then
+    echo "ERROR: Linux builds on this host require Docker." >&2
+    echo "       PostgreSQL's Linux shared libraries are resolved in a Debian container." >&2
+    echo "       Install Docker Desktop (or Docker Engine) and retry." >&2
+    exit 1
+  fi
+
+  if ! docker info >/dev/null 2>&1; then
+    echo "ERROR: Docker is installed but its daemon is not reachable." >&2
+    echo "       Start Docker Desktop (or the Docker daemon) and retry." >&2
+    echo "       Diagnose with: docker info" >&2
+    exit 1
+  fi
+fi
+
 echo "Setting up PostgreSQL $PG_VERSION binaries for $PLATFORM..."
 echo "  Target: $PG_DIR"
 
@@ -493,7 +514,7 @@ if [[ "$PLATFORM" == linux-* ]] && [ -d "$PG_BIN_DIR" ]; then
     # Run the library bundling inside a Debian container matching the target arch.
     # The container has ldd, patchelf, and common system libraries (libxml2, libssl, etc.)
     # installed, so all PG dependencies can be resolved.
-    docker run --rm --platform "$DOCKER_PLATFORM" \
+    if ! docker run --rm --platform "$DOCKER_PLATFORM" \
       -v "$PG_DIR:/pg" \
       debian:bookworm-slim \
       bash -c '
@@ -585,11 +606,39 @@ if [[ "$PLATFORM" == linux-* ]] && [ -d "$PG_BIN_DIR" ]; then
         TOTAL=$(ls /pg/lib/*.so* 2>/dev/null | wc -l)
         echo "  Done: $TOTAL shared libraries bundled."
       '
+    then
+      echo "ERROR: Docker-based shared library bundling failed." >&2
+      echo "       Check that Docker Desktop is running and can run $DOCKER_PLATFORM containers." >&2
+      exit 1
+    fi
 
     echo "  Docker-based library bundling complete"
   else
-    echo "  WARNING: ldd not found and Docker not available — cannot bundle shared libraries"
-    echo "  User must install required system libraries (libxml2, libssl, etc.)"
+    echo "  ERROR: ldd not found and Docker not available — cannot bundle shared libraries" >&2
+    exit 1
+  fi
+
+  # Verify the bundle in a clean container: every dependency must resolve from
+  # the bundled libraries. This catches incomplete copies caused by a bind-mount
+  # race (seen on the first Docker Desktop start) before packaging a broken app.
+  if ! command -v ldd &>/dev/null; then
+    echo "  Verifying bundled libraries in a clean container..."
+    if ! docker run --rm --platform "$DOCKER_PLATFORM" \
+      -v "$PG_DIR:/pg" \
+      debian:bookworm-slim \
+      bash -c '
+        MISSING=$(for f in /pg/bin/*; do ldd "$f" 2>/dev/null; done | grep -a "not found" | sort -u)
+        if [ -n "$MISSING" ]; then
+          echo "  Missing dependencies:" >&2
+          echo "$MISSING" >&2
+          exit 1
+        fi
+      '
+    then
+      echo "ERROR: PostgreSQL bundle is incomplete — some shared libraries are missing." >&2
+      echo "       Restart Docker Desktop and retry." >&2
+      exit 1
+    fi
   fi
 
   # List final bundled .so files

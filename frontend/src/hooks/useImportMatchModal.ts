@@ -47,7 +47,7 @@ export function useImportMatchModal({ onClose, onImported }: {
       return;
     }
     const lower = filename.toLowerCase();
-    if (lower.endsWith('.mdb') || lower.endsWith('.accdb')) setActiveTab('winmss');
+    if (lower.endsWith('.mdb') || lower.endsWith('.accdb') || lower.endsWith('.cab')) setActiveTab('winmss');
     else if (lower.endsWith('.psc')) setActiveTab('psc');
     else setActiveTab('json');
   }, [local]);
@@ -114,7 +114,7 @@ export function useImportMatchModal({ onClose, onImported }: {
   const handleWinMssInspect = useCallback(async () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.mdb,.accdb';
+    input.accept = '.mdb,.accdb,.cab';
     input.onchange = async () => {
       if (!input.files?.[0]) return;
       setWinmssInspecting(true);

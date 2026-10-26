@@ -5,11 +5,14 @@ export interface ImportResult {
   stages: Array<{ id: string; name: string; stage_number: number; updated?: boolean }>;
   shooters: { created: number; skipped: number; errors: string[] };
   registrations: { created: number; skipped: number };
-  scores: { created: number; errors: string[] };
+  scores: { created: number; skipped?: number; errors: string[] };
   warnings: string[];
 }
 
 export interface WinMssInspection {
+  format?: 'mdb' | 'cab';
+  files?: string[];
+  warnings?: string[];
   tables?: Record<string, {
     rowCount: number;
     columns?: string[];

@@ -8,6 +8,8 @@ import {
   buildTagLookup, buildRegionLookup,
 } from '../utils/winmssMapper.js';
 import { calculateAggregatedScore } from '../utils/scoringCalc.js';
+import { parseWinMssCab, WinMssCabParseError } from '../utils/winmssCabParser.js';
+import { importWinMssCab } from '../services/winmssCabImport.js';
 
 export const winmssImportRoutes = new Hono();
 
@@ -23,24 +25,67 @@ interface ImportResult {
   stages: StageResult[];
   shooters: { created: number; skipped: number; errors: string[] };
   registrations: { created: number; skipped: number };
-  scores: { created: number; errors: string[] };
+  scores: { created: number; skipped?: number; errors: string[] };
   warnings: string[];
 }
 
 /**
- * GET /api/import/winmss/inspect
- * Upload a .mdb file and inspect its tables/columns without importing.
+ * POST /api/import/winmss/inspect
+ * Upload a WinMSS .mdb/.accdb database or .cab archive and inspect its
+ * tables/rowsets without importing.
  */
 winmssImportRoutes.post('/winmss/inspect', async (c) => {
   const body = await c.req.parseBody();
   const file = body['file'];
 
   if (!file || !(file instanceof File)) {
-    return c.json({ error: 'No .mdb file provided' }, 400);
+    return c.json({ error: 'No WinMSS file provided' }, 400);
+  }
+
+  const lowerName = file.name.toLowerCase();
+  if (!lowerName.endsWith('.mdb') && !lowerName.endsWith('.accdb') && !lowerName.endsWith('.cab')) {
+    return c.json({ error: 'File must be a .mdb, .accdb or .cab file' }, 400);
   }
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (lowerName.endsWith('.cab')) {
+      const cab = await parseWinMssCab(buffer);
+      return c.json({
+        format: 'cab',
+        files: cab.files,
+        warnings: cab.warnings,
+        tables: {
+          THEMATCH: {
+            columns: cab.columns.THEMATCH,
+            rowCount: 1,
+            sampleRows: [cab.match],
+          },
+          MEMBER: {
+            columns: cab.columns.MEMBER,
+            rowCount: cab.members.length,
+            sampleRows: cab.members.slice(0, 3),
+          },
+          ENROLLED: {
+            columns: cab.columns.ENROLLED,
+            rowCount: cab.enrollments.length,
+            sampleRows: cab.enrollments.slice(0, 3),
+          },
+          STAGE: {
+            columns: cab.columns.STAGE,
+            rowCount: cab.stages.length,
+            sampleRows: cab.stages.slice(0, 3),
+          },
+          SCORE: {
+            columns: cab.columns.SCORE,
+            rowCount: cab.scores.length,
+            sampleRows: cab.scores.slice(0, 3),
+          },
+        },
+      });
+    }
+
     const reader = new MDBReader(buffer);
     const tableNames = reader.getTableNames();
 
@@ -63,31 +108,50 @@ winmssImportRoutes.post('/winmss/inspect', async (c) => {
 
     return c.json(result);
   } catch (err: any) {
+    if (err instanceof WinMssCabParseError) {
+      return c.json({ error: err.message }, 400);
+    }
     return c.json({ error: `Inspect failed: ${err.message}` }, 500);
   }
 });
 
 /**
  * POST /api/import/winmss
- * Import matches from a WinMSS .mdb file.
+ * Import matches from a WinMSS .mdb/.accdb database or .cab archive.
  *
  * Architecture: shooters are processed ONCE globally (not per-match),
  * then matches/stages/registrations/scores are processed per-match.
+ * .cab archives are Microsoft Cabinet (or ZIP) files containing match-scoped
+ * ADO XML rowsets and use a dedicated importer.
  */
 winmssImportRoutes.post('/winmss', async (c) => {
   const body = await c.req.parseBody();
   const file = body['file'];
 
   if (!file || !(file instanceof File)) {
-    return c.json({ error: 'No .mdb file provided' }, 400);
+    return c.json({ error: 'No WinMSS file provided' }, 400);
   }
 
-  if (!file.name.endsWith('.mdb') && !file.name.endsWith('.accdb')) {
-    return c.json({ error: 'File must be a .mdb or .accdb file' }, 400);
+  const lowerName = file.name.toLowerCase();
+  const isCab = lowerName.endsWith('.cab');
+  if (!isCab && !lowerName.endsWith('.mdb') && !lowerName.endsWith('.accdb')) {
+    return c.json({ error: 'File must be a .mdb, .accdb or .cab file' }, 400);
   }
 
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    if (isCab) {
+      const result = await importWinMssCab(buffer, file.name);
+      console.log(
+        `[WinMSS CAB Import] Complete: ${result.matches.length} match(es), ${result.stages.length} stages, ` +
+        `${result.shooters.created}/${result.shooters.skipped} shooters, ` +
+        `${result.registrations.created}/${result.registrations.skipped} registrations, ` +
+        `${result.scores.created} scores`,
+      );
+      return c.json(result);
+    }
+
     const reader = new MDBReader(buffer);
 
     const tableNames = reader.getTableNames();
@@ -885,6 +949,9 @@ winmssImportRoutes.post('/winmss', async (c) => {
     return c.json(result);
   } catch (err: any) {
     console.error('[WinMSS Import] Error:', err);
+    if (err instanceof WinMssCabParseError) {
+      return c.json({ error: err.message }, 400);
+    }
     return c.json({ error: `Import failed: ${err.message}` }, 500);
   }
 });
