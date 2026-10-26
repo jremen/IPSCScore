@@ -1,12 +1,15 @@
 import { all, one } from './db';
 import { parseJson } from './mappers';
+import { rankHigherIsBetter, rankLowerIsBetter } from '@ipscscore/core';
 import { getDivisionsForMatch, resolveDivisionForMatch } from '../../../utils/constants';
 import {
   matchResultsProfile,
   matchRingValues,
   ringValuesForStage,
   scoringTypeProfile,
+  stageRankingMode,
   type ResultsProfile,
+  type StageRankingMode,
 } from '../../../utils/resultsProfile';
 
 /**
@@ -53,6 +56,7 @@ export interface ScoreRow {
   hit_factor: number;
   stage_percent: number;
   stage_points: number;
+  max_points: number;
   procedural_count: number;
   is_dnf: number;
   score_data: string | null;
@@ -120,6 +124,7 @@ export async function loadRegistrations(matchId: string): Promise<RegistrationRo
 export async function loadScores(matchId: string): Promise<ScoreRow[]> {
   return all<ScoreRow>(
     `SELECT ss.id, ss.registration_id, ss.stage_id, st.scoring_type, st.config, st.stage_number,
+            st.max_points,
             ss.time, ss.total_time, ss.net_points, ss.hit_factor,
             ss.stage_percent, ss.stage_points, ss.procedural_count, ss.is_dnf, ss.score_data
      FROM stage_scores ss
@@ -306,6 +311,78 @@ function round(value: number, decimals: number): number {
   return Math.round(value * factor) / factor;
 }
 
+function stageValue(mode: StageRankingMode, score: ScoreRow): number {
+  switch (mode) {
+    case 'hit_factor':
+      return Number(score.hit_factor ?? 0);
+    case 'net_points':
+      return Number(score.net_points ?? 0);
+    case 'time':
+      return Number(score.total_time ?? 0);
+    default:
+      return 0;
+  }
+}
+
+/**
+ * Combined ("all divisions") match points, mirroring the backend.
+ *
+ * Stored `stage_points` are division-relative: each division's stage winner
+ * gets the full stage points. The combined table re-scores every stage against
+ * the best value in the whole field, so shooters from different divisions are
+ * comparable. Unknown scoring types fall back to the stored division points.
+ */
+function combinedMatchPoints(
+  scores: ScoreRow[],
+  registrations: RegistrationRow[],
+): Map<string, number> {
+  const disqualified = new Set(
+    registrations.filter((reg) => reg.is_dq === 1).map((reg) => reg.id),
+  );
+
+  const scoresByStage = new Map<string, ScoreRow[]>();
+  for (const score of scores) {
+    const bucket = scoresByStage.get(score.stage_id);
+    if (bucket) bucket.push(score);
+    else scoresByStage.set(score.stage_id, [score]);
+  }
+
+  const totals = new Map<string, number>();
+
+  for (const stageScores of scoresByStage.values()) {
+    const mode = stageRankingMode(stageScores[0]?.scoring_type);
+    const maxPoints = Number(stageScores[0]?.max_points ?? 0);
+    const eligible = stageScores.filter(
+      (score) => !disqualified.has(score.registration_id) && score.is_dnf !== 1,
+    );
+    const values = eligible
+      .map((score) => stageValue(mode, score))
+      .filter((value) => (mode === 'time' ? value > 0 : value >= 0));
+    const best = values.length === 0
+      ? 0
+      : mode === 'time'
+        ? Math.min(...values)
+        : Math.max(...values);
+
+    for (const score of eligible) {
+      const value = stageValue(mode, score);
+      const contribution = mode === 'none'
+        ? Number(score.stage_points ?? 0)
+        : mode === 'time'
+          ? rankLowerIsBetter(value, best, maxPoints).stage_points
+          : rankHigherIsBetter(value, best, maxPoints).stage_points;
+
+      totals.set(score.registration_id, (totals.get(score.registration_id) ?? 0) + contribution);
+    }
+  }
+
+  for (const [registrationId, total] of totals) {
+    totals.set(registrationId, round(total, 2));
+  }
+
+  return totals;
+}
+
 interface ResultRow {
   registration_id: string;
   first_name: string;
@@ -388,6 +465,8 @@ interface MatchContext {
   ringValues: number[];
   divisionApplies: boolean;
   matchInfo: MatchInfo | null;
+  /** Combined match points per registration (zone matches with divisions). */
+  combined: Map<string, number> | null;
 }
 
 async function loadContext(matchId: string): Promise<MatchContext> {
@@ -428,13 +507,19 @@ async function loadContext(matchId: string): Promise<MatchContext> {
   active.sort((a, b) => b.match_points - a.match_points);
   dq.sort((a, b) => a.last_name.localeCompare(b.last_name) || a.first_name.localeCompare(b.first_name));
 
+  const divisionApplies = getDivisionsForMatch(matchInfo).length > 0;
+  const combined = profile === 'zone' && divisionApplies
+    ? combinedMatchPoints(scores, registrations)
+    : null;
+
   return {
     active,
     dq,
     profile,
     ringValues,
-    divisionApplies: getDivisionsForMatch(matchInfo).length > 0,
+    divisionApplies,
     matchInfo,
+    combined,
   };
 }
 
@@ -496,9 +581,20 @@ export async function matchProgress(matchId: string) {
   return { scoredLength, stagesLength, registrationsLength, progressValue };
 }
 
+/** Replace division-relative points with combined points and re-rank. */
+function applyCombinedPoints(rows: ResultRow[], combined: Map<string, number>): ResultRow[] {
+  return rows
+    .map((row) => {
+      const points = combined.get(row.registration_id);
+      return points == null ? row : { ...row, match_points: points };
+    })
+    .sort((a, b) => b.match_points - a.match_points);
+}
+
 export async function overallResults(matchId: string) {
-  const { active, dq } = await loadContext(matchId);
-  return { results: withPositions(active), dq: dqRows(dq) };
+  const { active, dq, combined } = await loadContext(matchId);
+  const ranked = combined ? applyCombinedPoints(active, combined) : active;
+  return { results: withPositions(ranked), dq: dqRows(dq) };
 }
 
 export async function divisionResults(matchId: string) {

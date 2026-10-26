@@ -12,6 +12,7 @@ import {
   type MatchScoringMeta,
   type ResultsProfile,
 } from '../utils/resultsScoring.js';
+import { loadCombinedMatchPoints } from '../services/combinedResults.js';
 
 export const resultsRoutes = new Hono();
 
@@ -254,8 +255,21 @@ function decorateMatchRow(row: any, context: MatchContext) {
   };
 }
 
-function prepareMatchRows(rows: any[], context: MatchContext, isDq: boolean) {
-  const decorated = rows.map((row) => decorateMatchRow(row, context));
+function prepareMatchRows(
+  rows: any[],
+  context: MatchContext,
+  isDq: boolean,
+  combinedPoints?: Map<string, number> | null,
+) {
+  const decorated = rows.map((row) => {
+    const result = decorateMatchRow(row, context);
+    const combined = combinedPoints?.get(row.registration_id);
+    if (!isDq && combined != null) {
+      // Combined table: match points are re-scored against the whole field.
+      result.match_points = combined;
+    }
+    return result;
+  });
   if (!isDq) {
     // Non-zone profiles rank by achieved points, not by the stored
     // division-relative stage points.
@@ -292,8 +306,15 @@ resultsRoutes.get('/matches/:matchId/results/overall', async (c) => {
   const matchId = c.req.param('matchId');
   const context = await loadMatchContext(matchId);
 
+  // Hit-factor matches with divisions are ranked against the whole field,
+  // mirroring PractiScore's combined table. Everything else (single division,
+  // ring/hit-count scoring) already ranks correctly from the stored points.
+  const combined = context.meta.profile === 'zone' && context.divisionApplies
+    ? await loadCombinedMatchPoints(matchId)
+    : null;
+
   const results = await runMatchQuery(matchId, false);
-  const ranked = rankGroup(prepareMatchRows(results, context, false));
+  const ranked = rankGroup(prepareMatchRows(results, context, false, combined));
 
   const dq = await runMatchQuery(matchId, true);
   const dqRanked = prepareMatchRows(dq, context, true);

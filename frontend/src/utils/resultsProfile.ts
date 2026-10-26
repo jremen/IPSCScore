@@ -62,6 +62,36 @@ export function scoringTypeProfile(
   }
 }
 
+/**
+ * Which stage value decides the stage winner.
+ *
+ * Mirrors `backend/src/utils/stageRanking.ts`; the combined ("all divisions")
+ * table re-scores each stage against the best value in the whole field.
+ */
+export type StageRankingMode = 'hit_factor' | 'net_points' | 'time' | 'none';
+
+export function stageRankingMode(scoringType: string | null | undefined): StageRankingMode {
+  switch (scoringType) {
+    case 'comstock':
+    case 'virginia':
+    case 'hit_factor':
+      return 'hit_factor';
+    case 'fixed_time':
+    case 'bullseye':
+    case 'archery':
+    case 'issf':
+    case 'long_range':
+    case 'nrl22':
+      return 'net_points';
+    case 'idpa':
+    case 'action_steel':
+    case 'multi_gun':
+      return 'time';
+    default:
+      return 'none';
+  }
+}
+
 /** Pick one profile for the whole match. Mixed profiles fall back to zones. */
 export function matchResultsProfile(stages: StageLike[] | null | undefined): ResultsProfile {
   const profiles = (stages ?? [])

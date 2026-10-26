@@ -1,4 +1,5 @@
 import { sql } from '../db/client.js';
+import { stageRankingMode } from '../utils/stageRanking.js';
 
 /**
  * Recalculate stage_percent and stage_points for all shooters on a stage.
@@ -10,14 +11,14 @@ import { sql } from '../db/client.js';
  */
 export async function recalculateStage(_matchId: string, stageId: string) {
   const [stage] = await sql`SELECT * FROM stages WHERE id = ${stageId}`;
-  const stageConfig = typeof stage.config === 'string' ? JSON.parse(stage.config) : (stage.config || {});
   const scoringType = stage.scoring_type;
   const maxPoints = Number(stage.max_points);
+  const mode = stageRankingMode(scoringType);
 
   // Use a transaction for atomicity — prevents concurrent recalculations from interleaving
   await sql.begin(async (sql) => {
 
-    if (['comstock', 'virginia', 'hit_factor'].includes(scoringType)) {
+    if (mode === 'hit_factor') {
       // Rank by hit_factor (highest wins) within each division
       await sql`
         WITH ranked AS (
@@ -49,7 +50,7 @@ export async function recalculateStage(_matchId: string, stageId: string) {
         WHERE ss.id = ranked.id
       `;
 
-    } else if (scoringType === 'fixed_time') {
+    } else if (mode === 'net_points') {
       // Rank by net_points (highest wins) within each division
       await sql`
         WITH ranked AS (
@@ -81,7 +82,7 @@ export async function recalculateStage(_matchId: string, stageId: string) {
         WHERE ss.id = ranked.id
       `;
 
-    } else if (['idpa', 'action_steel', 'multi_gun'].includes(scoringType)) {
+    } else if (mode === 'time') {
       // Rank by total_time (lowest wins) within each division
       await sql`
         WITH ranked AS (
@@ -102,70 +103,6 @@ export async function recalculateStage(_matchId: string, stageId: string) {
               AND mr2.is_dq = FALSE
               AND ss2.is_dnf = FALSE
               AND ss2.total_time > 0
-              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
-          ) best
-          WHERE ss.stage_id = ${stageId}
-            AND mr.is_dq = FALSE
-            AND ss.is_dnf = FALSE
-        )
-        UPDATE stage_scores ss
-        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
-        FROM ranked
-        WHERE ss.id = ranked.id
-      `;
-
-    } else if (['bullseye', 'archery', 'issf'].includes(scoringType) || (scoringType === 'long_range' && stageConfig.variant === 'f_class')) {
-      // Rank by net_points (highest wins) within each division
-      await sql`
-        WITH ranked AS (
-          SELECT ss.id,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * 100 END, 4) as stage_percent,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * ${maxPoints} END, 2) as stage_points
-          FROM stage_scores ss
-          JOIN match_registrations mr ON mr.id = ss.registration_id
-          JOIN shooters s ON s.id = mr.shooter_id
-          CROSS JOIN LATERAL (
-            SELECT MAX(ss2.net_points) as best_np
-            FROM stage_scores ss2
-            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
-            JOIN shooters s2 ON s2.id = mr2.shooter_id
-            WHERE ss2.stage_id = ${stageId}
-              AND mr2.is_dq = FALSE
-              AND ss2.is_dnf = FALSE
-              AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
-          ) best
-          WHERE ss.stage_id = ${stageId}
-            AND mr.is_dq = FALSE
-            AND ss.is_dnf = FALSE
-        )
-        UPDATE stage_scores ss
-        SET stage_percent = ranked.stage_percent, stage_points = ranked.stage_points
-        FROM ranked
-        WHERE ss.id = ranked.id
-      `;
-
-    } else if (['nrl22'].includes(scoringType) || (scoringType === 'long_range' && stageConfig.variant !== 'f_class')) {
-      // Rank by net_points (highest wins) within each division
-      await sql`
-        WITH ranked AS (
-          SELECT ss.id,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * 100 END, 4) as stage_percent,
-            ROUND(CASE WHEN best.best_np <= 0 THEN 0
-                 ELSE (ss.net_points / best.best_np) * ${maxPoints} END, 2) as stage_points
-          FROM stage_scores ss
-          JOIN match_registrations mr ON mr.id = ss.registration_id
-          JOIN shooters s ON s.id = mr.shooter_id
-          CROSS JOIN LATERAL (
-            SELECT MAX(ss2.net_points) as best_np
-            FROM stage_scores ss2
-            JOIN match_registrations mr2 ON mr2.id = ss2.registration_id
-            JOIN shooters s2 ON s2.id = mr2.shooter_id
-            WHERE ss2.stage_id = ${stageId}
-              AND mr2.is_dq = FALSE
-              AND ss2.is_dnf = FALSE
               AND COALESCE(mr2.division, s2.division) = COALESCE(mr.division, s.division)
           ) best
           WHERE ss.stage_id = ${stageId}
