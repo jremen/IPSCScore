@@ -45,10 +45,11 @@ in place (`gh release upload --clobber`), so it is safe to repeat.
 
 | Asset | Built by | Runner |
 |---|---|---|
-| `IPSCScore-<version>-arm64.dmg` | `npm run build:mac` | `macos-latest` |
-| `IPSCScore Setup <version>-x64.exe` | `npm run build:win` | `windows-latest` |
-| `IPSCScore Setup <version>-arm64.exe` | `npm run build:win-arm64` | `windows-latest` |
-| `IPSCScore-<version>-x64.AppImage` | `npm run build:linux` | `ubuntu-latest` |
+| `IPSCScore-<version>_Mac_Apple_Silicon.dmg` | `npm run build:mac` | `macos-latest` |
+| `IPSCScore-<version>_Mac_Intel.dmg` | `npm run build:mac` | `macos-latest` |
+| `IPSCScore-<version>_Windows_x64.exe` | `npm run build:win` | `windows-latest` |
+| `IPSCScore-<version>_Windows_arm64.exe` | `npm run build:win-arm64` | `windows-latest` |
+| `IPSCScore-<version>_Linux_x64.AppImage` | `npm run build:linux` | `ubuntu-latest` |
 | `IPSCScore.apk` | `npm run build:android:release` | `ubuntu-latest` |
 | `CHANGELOG-<version>.md` | `scripts/generate-changelog.mjs` | `ubuntu-latest` |
 
@@ -57,6 +58,11 @@ build differ only in the machine. The names come from `artifactName` in
 [`electron/electron-builder.yml`](../electron/electron-builder.yml), which includes
 `${arch}` — without it the x64 and arm64 Windows installers would collide on one
 filename and one would silently overwrite the other.
+
+macOS is the exception: `${arch}` would print `arm64` / `x64`, which says little to
+someone picking a download, so `scripts/afterAllArtifactBuild.js` renames the
+finished artifacts to `_Mac_Apple_Silicon` / `_Mac_Intel` at the end of the build.
+Product name and version stay in front; only the arch token changes.
 
 The Android job installs the same toolchain the mobile guide asks for: **JDK 21**,
 platform 36 and build-tools 36.0.0. The APK is verified with `apksigner` before it
@@ -175,6 +181,11 @@ A distributable, notarized build needs a **Developer ID Application** certificat
   failed with `error while loading shared libraries: libz.so`. The toolset is
   downloaded once into electron-builder's cache (per runner) on the first Linux
   build. Normal AppImage mounting still requires FUSE2 on the target system.
+- **Linux builds from macOS require Docker Desktop.** `download-pg.sh` uses a
+  Debian container to resolve and bundle PostgreSQL's Linux shared libraries
+  because macOS has no `ldd` for ELF binaries. The script checks the Docker
+  daemon before downloading anything; CI builds Linux natively and does not
+  need Docker.
 - **Android is an APK, not an AAB** — it installs by sideloading, it is not a Play
   Store upload. `versionCode` is derived from the version
   (`major * 10000 + minor * 100 + patch`) so it stays monotonic; a Play Store
@@ -199,6 +210,7 @@ A distributable, notarized build needs a **Developer ID Application** certificat
 | `Version check failed` | The tag and the `package.json` versions disagree. Run `npm run version:patch\|minor\|major`, commit, then re-tag. |
 | `npm ci can only install packages when your package.json and package-lock.json are in sync` | The lock file is stale. Run `npm install` locally, commit `package-lock.json`, then re-run the workflow. |
 | Desktop job fails in `npm run build:*` | Usually a missing PostgreSQL download or a packaging error; open the job log — each `npm run` step is the local script verbatim. |
+| `failed to connect to the docker API at unix:///…/docker.sock` | Building Linux from macOS needs Docker Desktop running. Start it, confirm with `docker info`, then rerun `npm run build:linux` / `build:all`. |
 | Local `build:mac` looks stuck at `signing file=…IPSCScore.app` | electron-builder found a certificate and is signing the bundle one file at a time. Default `build:mac` is unsigned now; if you re-enabled discovery, use `build:mac:signed` or check `mac.signIgnore` in `electron-builder.yml`. |
 | `Secret ANDROID_KEYSTORE_BASE64 is not set` | Secrets are missing on the repository (or only set for an environment). See §3. |
 | `Keystore was tampered with, or password was incorrect` | Wrong `ANDROID_KEYSTORE_PASSWORD`, or the base64 was truncated. Re-copy it with `base64 -i` (no line wrapping). |

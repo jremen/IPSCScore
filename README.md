@@ -132,6 +132,8 @@ npm run build:linux-arm64  # Linux arm64 AppImage
 
 # The Linux AppImages use a static runtime and need no zlib1g-dev package.
 # Normal AppImage mounting still requires FUSE2 on the target system.
+# Linux builds on macOS require Docker Desktop to bundle PostgreSQL's Linux
+# shared libraries; start Docker before running them.
 ```
 
 > **Important:** Always rebuild from clean state before packaging. Never package from stale `dist/` artifacts.

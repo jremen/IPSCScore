@@ -13,11 +13,16 @@
 export const WINMSS_DIVISION_MAP: Record<number, string> = {
   1: 'open',
   2: 'standard',
-  3: 'modified',       // WinMSS id 3 = Modified (not used in IPSCScore, map to open)
+  3: 'open',          // WinMSS Modified is not an IPSCScore division; map to Open
   4: 'production',
   5: 'revolver',
   18: 'classic',
   24: 'production_optics',
+  // PCC / Optics divisions used by current WinMSS exports.
+  29: 'pcc_optics',
+  31: 'pcc_iron',
+  // Not present in older tblTypeDivision exports but used by current matches.
+  50: 'optics',
 };
 
 // ── Category Mapping ──────────────────────────────────────────────────
@@ -29,6 +34,7 @@ export const WINMSS_CATEGORY_MAP: Record<number, string> = {
   2: 'junior',
   3: 'senior',
   4: 'super_senior',
+  5: 'junior', // WinMSS "S. Junior" — IPSCScore has no separate super-junior category
 };
 
 // ── Power Factor Mapping ──────────────────────────────────────────────
@@ -43,6 +49,9 @@ export const WINMSS_FIREARM_MAP: Record<number, string> = {
   2: 'rifle',
   3: 'shotgun',
   4: 'pcc',           // WinMSS PCC → IPSCScore pcc (no pcc_optics/pcc_iron distinction)
+  5: 'handgun',       // Action Air
+  6: 'rifle',         // Mini-Rifle
+  7: 'pcc',           // Pistol Caliber Carbine
 };
 
 // ── Table Discovery ───────────────────────────────────────────────────
@@ -265,6 +274,12 @@ export function buildRegionLookup(rows: Record<string, any>[]): Map<number, stri
  */
 function mapDivisionNameToId(name: string): string | null {
   const lower = name.toLowerCase().trim();
+  // PCC divisions must be checked before the generic 'open'/'optics' rules.
+  if (lower.includes('pcc') || lower.includes('pc optic') || lower.includes('pc iron')) {
+    if (lower.includes('iron')) return 'pcc_iron';
+    if (lower.includes('optic')) return 'pcc_optics';
+  }
+  if (lower === 'optics' || lower === 'optic') return 'optics';
   if (lower.includes('open') || lower.includes('standard') && lower.includes('open')) return 'open';
   if (lower === 'standard' || lower === 'std') return 'standard';
   if (lower.includes('production') && lower.includes('optics')) return 'production_optics';
@@ -282,7 +297,9 @@ function mapCategoryName(name: string): string | null {
   const lower = name.toLowerCase().trim();
   if (lower.includes('lady') || lower.includes('women') || lower.includes('female')) return 'lady';
   if (lower.includes('super senior') || lower.includes('super_senior') || lower === 'ss') return 'super_senior';
+  if (lower.includes('s. senior') || lower.includes('s senior')) return 'super_senior';
   if (lower.includes('senior') || lower === 's') return 'senior';
+  if (lower.includes('s. junior') || lower.includes('s junior')) return 'junior';
   if (lower.includes('junior') || lower === 'j') return 'junior';
   if (lower.includes('regular') || lower.includes('general') || lower === 'r' || lower === 'open') return 'regular';
   return null;

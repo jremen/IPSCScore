@@ -68,7 +68,11 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
               <FileDropzone
                 accept={{
                   'application/x-msaccess': ['.mdb', '.accdb'],
-                  'application/octet-stream': ['.mdb', '.accdb'],
+                  'application/octet-stream': ['.mdb', '.accdb', '.cab'],
+                  'application/zip': ['.cab'],
+                  'application/x-cab': ['.cab'],
+                  'application/x-cab-compressed': ['.cab'],
+                  'application/vnd.ms-cab-compressed': ['.cab'],
                 }}
                 onFileSelected={handleWinMssImport}
                 disabled={winmssImporting || winmssInspecting}
@@ -99,6 +103,18 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
                 <Alert color="info">
                   <p className="font-medium">{t('import.winMss.inspectionTitle')}</p>
                   <p className="text-sm mt-1">{t('import.winMss.inspectionDescription')}</p>
+                  {winmssInspectData.format === 'cab' && winmssInspectData.files && (
+                    <p className="text-xs mt-2 font-mono break-all">
+                      {t('import.winMss.cabFiles', { files: winmssInspectData.files.join(', ') })}
+                    </p>
+                  )}
+                  {winmssInspectData.warnings && winmssInspectData.warnings.length > 0 && (
+                    <ul className="text-xs mt-2 list-disc pl-4">
+                      {winmssInspectData.warnings.map((warning, index) => (
+                        <li key={index}>{warning}</li>
+                      ))}
+                    </ul>
+                  )}
                 </Alert>
                 {Object.entries(winmssInspectData.tables || {}).map(([tableName, tableData]) => (
                   <div key={tableName} className="border rounded-lg p-3 dark:border-gray-600">
@@ -136,7 +152,11 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
                 <FileDropzone
                   accept={{
                     'application/x-msaccess': ['.mdb', '.accdb'],
-                    'application/octet-stream': ['.mdb', '.accdb'],
+                    'application/octet-stream': ['.mdb', '.accdb', '.cab'],
+                    'application/zip': ['.cab'],
+                    'application/x-cab': ['.cab'],
+                    'application/x-cab-compressed': ['.cab'],
+                    'application/vnd.ms-cab-compressed': ['.cab'],
                   }}
                   onFileSelected={handleWinMssImport}
                   disabled={winmssImporting || winmssInspecting}

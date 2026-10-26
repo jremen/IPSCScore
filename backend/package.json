@@ -1,12 +1,13 @@
 {
   "name": "ipscscore-backend",
-  "version": "2.7.1",
+  "version": "2.8.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
-    "build": "tsc -p tsconfig.build.json && cp -r src/db/migrations dist/db/"
+    "build": "tsc -p tsconfig.build.json && cp -r src/db/migrations dist/db/",
+    "verify:cab": "tsx scripts/verify-winmss-cab.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
