@@ -35,7 +35,7 @@ IPSCScore covers the full lifecycle of an IPSC/USPSA shooting match:
 3. **Live Scoring** — Range officers enter scores per-shooter per-stage: time, per-target hits (A/C/D/M/PT), penalties, steel hits. Mobile-first UI with 44px+ touch targets and sticky save bar.
 4. **Results & Rankings** — Automatic hit factor calculation, per-division ranking, stage percent/points, overall match results. Public results view auto-refreshes every 30 seconds.
 5. **Data Export** — PDF score sheets, CSV import/export for shooters/registrations/scores, full database backup/restore.
-6. **Legacy Import** — Import shooter data and scores from WinMSS `.mdb` database files.
+6. **Legacy Import** — Import shooter data and scores from WinMSS `.mdb` databases or `.cab` match exports.
 
 The app is designed for use on a local network at a shooting range: multiple range officers can score different stages simultaneously on tablets/phones, while competitors view live results on a big screen or their own devices.
 
@@ -343,8 +343,14 @@ Three access levels, determined by domain or login:
 
 ## WinMSS Import
 
-The app can import shooter data and scores from WinMSS `.mdb` database files:
+The app can import shooter data and scores from WinMSS `.mdb` databases and
+`.cab` match exports:
 
+- A `.cab` export is a Microsoft Cabinet (or ZIP) archive of ADO XML rowsets —
+  `THEMATCH.XML`, `MEMBER.XML`, `ENROLLED.XML`, `STAGE.XML`, `SCORE.XML` — holding
+  one match. The parser accepts stored and MSZIP-compressed cabinets.
+- Unknown WinMSS division IDs produce a warning and fall back to Production
+  instead of failing the import; re-importing the same match updates it.
 - WinMSS stores **aggregated totals** per shooter per stage (e.g., `ScoreA=22, ScoreC=8`), not per-target breakdowns.
 - WinMSS `ScoreA` **includes steel hits** — steel scores 5 points (same as A), so steel is counted in ScoreA. Must NOT add steel×5 separately.
 - `calculateAggregatedScore()` bypasses per-target "best N" capping entirely.
@@ -395,11 +401,12 @@ Gradle dependencies.
 [`mobile/README.md`](mobile/README.md).**
 
 Matches can be moved between the desktop/web app and a phone as `.match.json`
-(on-device import/export), and **Settings → Database** exports or restores a full
+(on-device import/export); WinMSS `.cab` and PractiScore `.psc` files import
+directly on the device, and **Settings → Database** exports or restores a full
 JSON backup of the device data without a computer. Not yet implemented on
-Android: WinMSS/CSV/PSC import, PSC export, cups, and stage images. Full details,
-the PostgreSQL→SQLite mapping and the remaining work are in
-[`docs/android.md`](docs/android.md).
+Android: WinMSS `.mdb/.accdb` import, CSV import/export, PSC export, cups, and
+stage images. Full details, the PostgreSQL→SQLite mapping and the remaining work
+are in [`docs/android.md`](docs/android.md).
 
 ---
 
@@ -428,9 +435,10 @@ distribution for club devices with a one-year lifetime.
 **Step-by-step build, signing and device-install guide (simulator, free Apple
 Account, Ad Hoc, troubleshooting): [`mobile/README-ios.md`](mobile/README-ios.md).**
 
-Feature coverage matches the Android app, including `.match.json` import/export
-and full JSON backup/restore through the Files app. The remaining gaps are
-WinMSS/CSV/PSC import, PSC export, cups and stage images. See
+Feature coverage matches the Android app, including `.match.json` import/export,
+WinMSS `.cab` and PractiScore `.psc` import, and full JSON backup/restore
+through the Files app. The remaining gaps are WinMSS `.mdb/.accdb` import, CSV
+import/export, PSC export, cups and stage images. See
 [`docs/android.md`](docs/android.md).
 
 ---

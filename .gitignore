@@ -18,3 +18,6 @@ yarn.lock
 *.jks
 mobile/android/keystore.properties
 mobile/android/local.properties
+
+# Real match exports used for manual/verification imports (personal data)
+vysledky/

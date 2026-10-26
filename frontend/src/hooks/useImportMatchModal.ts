@@ -42,15 +42,11 @@ export function useImportMatchModal({ onClose, onImported }: {
   useEscClose(handleClose);
 
   const detectTab = useCallback((filename: string) => {
-    if (local) {
-      setActiveTab('json');
-      return;
-    }
     const lower = filename.toLowerCase();
     if (lower.endsWith('.mdb') || lower.endsWith('.accdb') || lower.endsWith('.cab')) setActiveTab('winmss');
     else if (lower.endsWith('.psc')) setActiveTab('psc');
     else setActiveTab('json');
-  }, [local]);
+  }, []);
 
   const handleJsonFileSelected = useCallback((file: File) => {
     setSelectedFile(file);
@@ -93,6 +89,33 @@ export function useImportMatchModal({ onClose, onImported }: {
     }
   }, [handleClose, handleImport, onImported, pscFile, t]);
 
+  // Mobile builds parse `.cab` locally; Access databases need the desktop app.
+  const winmssDropzone = useMemo(() => {
+    const accept: Record<string, string[]> = local
+      ? {
+          'application/octet-stream': ['.cab'],
+          'application/zip': ['.cab'],
+          'application/x-cab': ['.cab'],
+          'application/x-cab-compressed': ['.cab'],
+          'application/vnd.ms-cab-compressed': ['.cab'],
+        }
+      : {
+          'application/x-msaccess': ['.mdb', '.accdb'],
+          'application/octet-stream': ['.mdb', '.accdb', '.cab'],
+          'application/zip': ['.cab'],
+          'application/x-cab': ['.cab'],
+          'application/x-cab-compressed': ['.cab'],
+          'application/vnd.ms-cab-compressed': ['.cab'],
+        };
+
+    return {
+      accept,
+      inspectAccept: local ? '.cab' : '.mdb,.accdb,.cab',
+      dragHint: local ? t('import.winMss.dragDropCabOffline') : t('import.winMss.dragDropMdb'),
+      browseHint: local ? t('import.winMss.orBrowseCabOffline') : t('import.winMss.orBrowse'),
+    };
+  }, [local, t]);
+
   const handleWinMssImport = useCallback(async (file: File) => {
     setWinmssImporting(true);
     setWinmssError(null);
@@ -114,7 +137,7 @@ export function useImportMatchModal({ onClose, onImported }: {
   const handleWinMssInspect = useCallback(async () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.mdb,.accdb,.cab';
+    input.accept = winmssDropzone.inspectAccept;
     input.onchange = async () => {
       if (!input.files?.[0]) return;
       setWinmssInspecting(true);
@@ -128,7 +151,7 @@ export function useImportMatchModal({ onClose, onImported }: {
       }
     };
     input.click();
-  }, []);
+  }, [winmssDropzone.inspectAccept]);
 
   const handleWinmssInspectBack = useCallback(() => setWinmssInspectData(null), []);
   const handleWinmssImportAnother = useCallback(() => {
@@ -163,6 +186,7 @@ export function useImportMatchModal({ onClose, onImported }: {
     winmssResult,
     winmssInspectData,
     winmssError,
+    winmssDropzone,
     tabItems,
     handleClose,
     handleJsonFileSelected,

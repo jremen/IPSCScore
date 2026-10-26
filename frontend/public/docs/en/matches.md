@@ -24,10 +24,10 @@ The Matches tab lists every match on this device. The currently active match is 
 Use **Import Match** at the top of the Matches tab to import:
 
 - IPSCScore `.match.json`
-- WinMSS `.mdb` / `.accdb`
+- WinMSS `.mdb` / `.accdb` / `.cab`
 - Practiscore `.psc`
 
-WinMSS and Practiscore import need the browser/desktop backend. The standalone Android/iOS app shows only the IPSCScore JSON option.
+The standalone Android/iOS app parses `.cab` and `.psc` on-device. Access `.mdb` / `.accdb` files need the browser/desktop backend — export the match to `.cab` in WinMSS to import it on a phone.
 
 Use the export button on a match row to choose IPSCScore `.match.json` or, in the browser/desktop app, Practiscore `.psc`.
 

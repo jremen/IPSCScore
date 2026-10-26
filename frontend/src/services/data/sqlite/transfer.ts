@@ -220,6 +220,23 @@ export async function importMatch(file: File): Promise<{
     throw new Error('Invalid JSON file');
   }
 
+  return importMatchData(data);
+}
+
+/**
+ * Persist a match export document (or an importer-built payload with the same
+ * shape) into the local database.
+ *
+ * Used by the IPSCScore JSON import and by the offline WinMSS `.cab` /
+ * PractiScore `.psc` importers, so every source follows identical insert and
+ * shooter-deduplication rules.
+ */
+export async function importMatchData(data: any): Promise<{
+  success: boolean;
+  match_id: string;
+  counts: MatchImportCounts;
+  shooters: { created: number; reused: number };
+}> {
   if (!data || typeof data !== 'object' || !data.match || !Array.isArray(data.stages) || !Array.isArray(data.registrations)) {
     throw new Error('Invalid match export file: missing required fields');
   }
@@ -241,16 +258,49 @@ export async function importMatch(file: File): Promise<{
   const targetScores = asArray(data.target_scores);
   const chronoResults = asArray(data.chrono_results);
 
+  // Imported shooter IDs may already exist on this device under a different
+  // ID — WinMSS re-imports, for example, generate fresh UUIDs for the same
+  // MemberId. Reuse the local record in that case so a person is not
+  // duplicated across matches.
+  const shooterIdMap = new Map<string, string>();
+  let shootersCreated = 0;
+  let shootersReused = 0;
+
   await transaction(async () => {
-    // Shooters may already exist on this device (same person, another match).
-    // Keep the local record in that case — same behaviour as the backend import.
-    const seen = new Set<string>();
     for (const reg of registrations) {
       const shooter = reg?.shooter;
-      if (!shooter?.id || seen.has(shooter.id)) continue;
-      seen.add(shooter.id);
+      if (!shooter?.id || shooterIdMap.has(shooter.id)) continue;
+
+      let localId = shooter.id;
+      const memberId = shooter.winmss_member_id;
+      if (memberId !== null && memberId !== undefined && memberId !== '') {
+        const match = await one<{ id: string; deleted_at: string | null }>(
+          `SELECT id, deleted_at FROM shooters WHERE winmss_member_id = ? LIMIT 1`,
+          [String(memberId)],
+        );
+        if (match) {
+          localId = match.id;
+          // A shooter deleted on this device is restored by a fresh import
+          // rather than duplicated (the member id is unique).
+          if (match.deleted_at) {
+            await run(`UPDATE shooters SET deleted_at = NULL WHERE id = ?`, [match.id]);
+          }
+        }
+      }
+
+      if (localId === shooter.id) {
+        const sameId = await one<{ id: string }>(`SELECT id FROM shooters WHERE id = ?`, [shooter.id]);
+        if (sameId) localId = sameId.id;
+      }
+
+      shooterIdMap.set(shooter.id, localId);
+      if (localId !== shooter.id) {
+        shootersReused++;
+        continue;
+      }
+
       await run(
-        `INSERT OR IGNORE INTO shooters
+        `INSERT INTO shooters
            (id, first_name, last_name, category, division, power_factor, region, email, winmss_member_id)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -265,6 +315,7 @@ export async function importMatch(file: File): Promise<{
           shooter.winmss_member_id ?? null,
         ],
       );
+      shootersCreated++;
     }
 
     await run(
@@ -315,7 +366,7 @@ export async function importMatch(file: File): Promise<{
         [
           reg.id,
           matchId,
-          reg.shooter?.id,
+          shooterIdMap.get(reg.shooter?.id) ?? reg.shooter?.id,
           reg.squad ?? null,
           reg.division_override ?? null,
           reg.category_override ?? null,
@@ -412,6 +463,10 @@ export async function importMatch(file: File): Promise<{
       scores: stageScores.length,
       targets: targetScores.length,
       chrono: chronoResults.length,
+    },
+    shooters: {
+      created: shootersCreated,
+      reused: shootersReused,
     },
   };
 }

@@ -39,7 +39,14 @@ frontend/                 the UI, unchanged for all four runtimes
       scoring.ts          score save (atomic) + stage recalculation
       results.ts          overall / division / stage / category / tag results
       auth.ts             local admin password (PBKDF2) + session token
+      transfer.ts         .match.json import/export + full JSON backup
       client.ts           the api-shaped facade
+  src/services/import/    offline WinMSS .cab / PractiScore .psc importers
+    cabArchive.ts         Microsoft Cabinet (MSCF) reader
+    winmssCabParser.ts    WinMSS ADO XML rowset parser
+    winmssCabImport.ts    CAB → normalized import payload
+    practiscoreParser.ts  PractiScore .psc → normalized import payload
+    localImport.ts        persist payload + recalculate rankings
 
 mobile/                   Capacitor shell (Android + iOS)
   capacitor.config.ts
@@ -228,6 +235,11 @@ Fully local, offline, no computer required:
 - PDF / CSV / HTML export straight to `Documents/IPSCScore/`
 - **match JSON import/export** — the same `.match.json` format as the desktop/web
   app, with IDs preserved so a file can move in either direction
+- **WinMSS `.cab` import** — parsed on-device (Microsoft Cabinet / ZIP archive of
+  ADO XML rowsets) with stages, squads, divisions, categories, power factor, DQ
+  and scores; re-importing the same match replaces it instead of duplicating it
+- **PractiScore `.psc` import** — parsed on-device (ZIP with `match_def.json` and
+  `match_scores.json`), including hit distribution and stage ranking
 - **full JSON backup/restore** — every local table (settings, matches, shooters,
   scores, cups) written as one portable document and restored atomically in a
   single SQLite transaction
@@ -238,10 +250,9 @@ Fully local, offline, no computer required:
 Declared in `client.ts` and currently throwing
 `LocalFeatureUnavailableError`:
 
-- **Server-side formats**: WinMSS import, CSV import/export, PSC import/export.
-  These need the server-side parsers (`csv-parse`, the WinMSS reader, the PSC ZIP
-  reader) moved into a shared package. Their controls are hidden on mobile so
-  the UI never offers a button that cannot work.
+- **Server-only formats**: WinMSS `.mdb/.accdb` import (Access database reader),
+  CSV import/export, PSC export. `.mdb/.accdb` must be exported to `.cab` in
+  WinMSS before importing on a phone; the mobile WinMSS dialog says so.
 - **Cups**: aggregation across matches; pure read logic, straightforward to port
   onto `results.ts`.
 - **Stage images**: needs `@capacitor/filesystem` instead of the multer upload.

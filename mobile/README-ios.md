@@ -489,12 +489,14 @@ Fully local, offline, no computer required:
 - overall / division / stage / category / tag results and shooter scorecards
 - PDF / CSV / HTML export to `Documents/IPSCScore/` (Files app)
 - `.match.json` match import/export — the same format as the desktop/web app
+- WinMSS `.cab` import (export the match to `.cab` in WinMSS first) and
+  PractiScore `.psc` import, both parsed on-device
 - full JSON backup/restore of the device database (**Settings → Database**)
 - admin password + login
 
 Not implemented on the mobile builds (iOS included); the controls are hidden:
 
-- WinMSS import, CSV import/export, Practiscore `.psc` import/export
+- WinMSS `.mdb/.accdb` import, CSV import/export, Practiscore `.psc` export
 - cups aggregation
 - stage images
 

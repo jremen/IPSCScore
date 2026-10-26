@@ -19,6 +19,7 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
     winmssResult,
     winmssInspectData,
     winmssError,
+    winmssDropzone,
     tabItems,
     handleClose,
     handleJsonFileSelected,
@@ -35,15 +36,13 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
     <Modal show={show} onClose={handleClose} size="xl" className="dark:text-white">
       <ModalHeader>{t('matches.importMatch')}</ModalHeader>
       <ModalBody>
-        {!local && (
-          <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-700">
-            {tabItems.map((tab) => (
-              <button key={tab.id} className={tab.className} onClick={() => setActiveTab(tab.id)}>
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex gap-1 mb-4 border-b border-gray-200 dark:border-gray-700">
+          {tabItems.map((tab) => (
+            <button key={tab.id} className={tab.className} onClick={() => setActiveTab(tab.id)}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
         {activeTab === 'json' && (
           <div>
@@ -65,22 +64,22 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
         {activeTab === 'winmss' && (
           <div>
             {!winmssImporting && !winmssInspecting && !winmssResult && !winmssInspectData && !winmssError && (
-              <FileDropzone
-                accept={{
-                  'application/x-msaccess': ['.mdb', '.accdb'],
-                  'application/octet-stream': ['.mdb', '.accdb', '.cab'],
-                  'application/zip': ['.cab'],
-                  'application/x-cab': ['.cab'],
-                  'application/x-cab-compressed': ['.cab'],
-                  'application/vnd.ms-cab-compressed': ['.cab'],
-                }}
-                onFileSelected={handleWinMssImport}
-                disabled={winmssImporting || winmssInspecting}
-                dropHint={t('import.winMss.dropHere')}
-                dragHint={t('import.winMss.dragDropMdb')}
-                browseHint={t('import.winMss.orBrowse')}
-                extraButton={{ label: t('import.winMss.inspectButton'), onClick: handleWinMssInspect }}
-              />
+              <>
+                {local && (
+                  <Alert color="info" className="mb-3">
+                    <p className="text-sm">{t('import.winMss.mobileCabOnly')}</p>
+                  </Alert>
+                )}
+                <FileDropzone
+                  accept={winmssDropzone.accept}
+                  onFileSelected={handleWinMssImport}
+                  disabled={winmssImporting || winmssInspecting}
+                  dropHint={t('import.winMss.dropHere')}
+                  dragHint={winmssDropzone.dragHint}
+                  browseHint={winmssDropzone.browseHint}
+                  extraButton={{ label: t('import.winMss.inspectButton'), onClick: handleWinMssInspect }}
+                />
+              </>
             )}
 
             {winmssImporting && (
@@ -150,18 +149,11 @@ export default function ImportMatchModal({ show, onClose, onImported }: ImportMa
                   <p className="text-sm mt-1">{winmssError}</p>
                 </Alert>
                 <FileDropzone
-                  accept={{
-                    'application/x-msaccess': ['.mdb', '.accdb'],
-                    'application/octet-stream': ['.mdb', '.accdb', '.cab'],
-                    'application/zip': ['.cab'],
-                    'application/x-cab': ['.cab'],
-                    'application/x-cab-compressed': ['.cab'],
-                    'application/vnd.ms-cab-compressed': ['.cab'],
-                  }}
+                  accept={winmssDropzone.accept}
                   onFileSelected={handleWinMssImport}
                   disabled={winmssImporting || winmssInspecting}
                   dropHint={t('import.winMss.dropHere')}
-                  dragHint={t('import.winMss.dragDropMdb')}
+                  dragHint={winmssDropzone.dragHint}
                   browseHint={t('import.winMss.tryAgain')}
                 />
               </div>

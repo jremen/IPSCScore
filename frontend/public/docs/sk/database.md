@@ -32,6 +32,6 @@ Priečinok záloh musí byť dostupný, aby automatický režim fungoval. Ak je 
 
 ## Import WinMSS a Practiscore
 
-Súbory WinMSS (`.mdb` / `.accdb`) a Practiscore (`.psc`) sa importujú cez **Súťaže → Importovať súťaž**, nie cez Nastavenia → Databáza. Tieto parsery bežia v serverovej časti prehliadača/desktopu a v samostatnej aplikácii pre Android/iOS sú skryté.
+Súbory WinMSS (`.mdb` / `.accdb` / `.cab`) a Practiscore (`.psc`) sa importujú cez **Súťaže → Importovať súťaž**, nie cez Nastavenia → Databáza. Samostatná aplikácia pre Android/iOS spracováva `.cab` a `.psc` priamo v zariadení; čítač Access súborov `.mdb` / `.accdb` vyžaduje desktopovú aplikáciu, preto najprv exportujte súťaž do `.cab` vo WinMSS.
 
 Postup importu nájdete v [Súťaže](matches.md).

@@ -5,14 +5,17 @@ import * as People from './people';
 import * as Scoring from './scoring';
 import * as Results from './results';
 import * as Transfer from './transfer';
+import * as LocalImport from '../../import/localImport';
 
 /**
  * The standalone (Android/iOS) implementation of the frontend's API surface.
  *
  * Every method mirrors `services/api.ts` so components cannot tell which runtime
- * they are on. Features that genuinely need a server — WinMSS/PSC import,
- * server-side CSV parsing, folder backups, remote scorer trust — are declared
- * here and fail with an explicit message rather than silently doing nothing.
+ * they are on. IPSCScore JSON, WinMSS `.cab` and PractiScore `.psc` imports all
+ * run fully on-device. Features that genuinely need a server — `.mdb`/`.accdb`
+ * parsing, server-side CSV parsing, folder backups, remote scorer trust — are
+ * declared here and fail with an explicit message rather than silently doing
+ * nothing.
  */
 
 class LocalFeatureUnavailableError extends Error {
@@ -74,12 +77,13 @@ export function createLocalClient() {
     deleteMatch: (id: string) => Matches.deleteMatch(id),
     bulkDeleteMatches: (matchIds: string[]) => Matches.bulkDeleteMatches(matchIds),
 
-    // IPSCScore JSON works offline; the WinMSS/PSC parsers stay server-side and
-    // their controls are hidden on mobile.
+    // IPSCScore JSON, WinMSS `.cab` and PractiScore `.psc` imports run fully
+    // on-device; only the Access `.mdb/.accdb` and PSC export paths need the
+    // desktop backend.
     exportMatch: (id: string) => Transfer.exportMatch(id),
     exportMatchPsc: async () => unavailable('PSC export'),
     importMatch: (file: File) => Transfer.importMatch(file),
-    importMatchPsc: async () => unavailable('PSC import'),
+    importMatchPsc: (file: File) => LocalImport.importPscMatchFile(file),
 
     // ── Stages ───────────────────────────────────────────────────────────
     getStages: (matchId: string) => Matches.listStages(matchId),
@@ -165,12 +169,14 @@ export function createLocalClient() {
     removeCupMatch: async () => unavailable('Cups'),
     getCupResults: async () => unavailable('Cups'),
 
-    // ── CSV / WinMSS import (server-side parsers) ────────────────────────
+    // ── CSV / WinMSS import ──────────────────────────────────────────────
+    // CSV stays server-side. WinMSS `.cab` is parsed locally; `.mdb/.accdb`
+    // needs the desktop app.
     importShooters: async () => unavailable('CSV shooter import'),
     importRegistrations: async () => unavailable('CSV registration import'),
     importScores: async () => unavailable('CSV score import'),
-    importWinMSS: async () => unavailable('WinMSS import'),
-    inspectWinMSS: async () => unavailable('WinMSS inspection'),
+    importWinMSS: (file: File) => LocalImport.importWinMssFile(file),
+    inspectWinMSS: (file: File) => LocalImport.inspectWinMssFile(file),
 
     // ── Backup ───────────────────────────────────────────────────────────
     // Full local database as portable JSON (not a PostgreSQL .sql dump).

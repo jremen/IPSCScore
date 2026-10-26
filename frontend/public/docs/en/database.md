@@ -32,6 +32,6 @@ The backup folder must remain accessible for the automatic schedule to work. If 
 
 ## WinMSS and Practiscore import
 
-WinMSS (`.mdb` / `.accdb`) and Practiscore (`.psc`) files are imported from **Matches → Import Match**, not from Settings → Database. These parsers run in the browser/desktop backend and are hidden in the standalone Android/iOS app.
+WinMSS (`.mdb` / `.accdb` / `.cab`) and Practiscore (`.psc`) files are imported from **Matches → Import Match**, not from Settings → Database. The standalone Android/iOS app parses `.cab` and `.psc` on-device; the Access `.mdb` / `.accdb` reader needs the desktop app, so export the match to `.cab` in WinMSS first.
 
 See [Matches](matches.md) for the import workflow.

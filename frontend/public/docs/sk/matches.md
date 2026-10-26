@@ -24,10 +24,10 @@ Záložka Súťaže zobrazuje všetky súťaže na tomto zariadení. Aktuálna s
 Pomocou **Importovať súťaž** v hornej časti záložky Súťaže môžete importovať:
 
 - IPSCScore `.match.json`
-- WinMSS `.mdb` / `.accdb`
+- WinMSS `.mdb` / `.accdb` / `.cab`
 - Practiscore `.psc`
 
-Import WinMSS a Practiscore potrebuje serverovú časť prehliadača/desktopu. Samostatná aplikácia pre Android/iOS ponúka iba možnosť IPSCScore JSON.
+Samostatná aplikácia pre Android/iOS spracováva `.cab` a `.psc` priamo v zariadení. Access súbory `.mdb` / `.accdb` vyžadujú serverovú časť prehliadača/desktopu — pre import na telefóne exportujte súťaž do `.cab` vo WinMSS.
 
 Tlačidlom exportu v riadku súťaže vyberiete IPSCScore `.match.json` alebo v prehliadači/desktop aplikácii Practiscore `.psc`.
 

@@ -33,6 +33,8 @@
     "open:ios": "cd mobile && npm run open:ios",
     "run:ios": "cd mobile && npm run run:ios",
     "clean:build": "rm -rf frontend/dist backend/dist electron/dist electron/dist-backend electron/frontend-dist-bundled dist-electron",
+    "verify:cab": "cd backend && npm run verify:cab",
+    "verify:imports": "cd frontend && npm run verify:imports",
     "version:patch": "node scripts/version-bump.mjs patch",
     "version:minor": "node scripts/version-bump.mjs minor",
     "version:major": "node scripts/version-bump.mjs major"

@@ -385,12 +385,15 @@ adb shell dumpsys package com.ipscscore.app | grep versionName
 Everything runs on-device with a local SQLite database. Supported offline:
 
 - `.match.json` match import/export (same format as the desktop/web app)
+- WinMSS `.cab` import (export the match to `.cab` in WinMSS first — the Access
+  `.mdb/.accdb` files still need the desktop app)
+- PractiScore `.psc` import
 - full JSON backup/restore of the device database (**Settings → Database**)
 
 The following capabilities are **not implemented** on Android; their controls are
 hidden and the matching `client.ts` methods raise `LocalFeatureUnavailableError`:
 
-- WinMSS import, CSV import/export, Practiscore `.psc` import/export
+- WinMSS `.mdb/.accdb` import, CSV import/export, Practiscore `.psc` export
 - local-folder automatic backup (Electron only)
 - cups, stage image upload/removal, audit log
 
